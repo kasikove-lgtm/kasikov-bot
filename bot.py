@@ -711,18 +711,34 @@ async def slot_selected(cb: types.CallbackQuery):
     time_str = parts[2]
     uid = cb.from_user.id
     consult_type = user_state.get(uid, {}).get("type", "free")
-    user_state[uid] = {
-        "step": "awaiting_duration",
-        "date": date_str,
-        "time": time_str,
-        "type": consult_type
-    }
     log_action(uid, cb.from_user.username, f"slot_{date_str}_{time_str}")
     await cb.message.delete()
-    await cb.message.answer(
-        f"✅ *{date_str}* в *{time_str}* МСК\n\nВыбери длительность сессии:",
-        parse_mode="Markdown", reply_markup=duration_menu())
 
+    if consult_type == "free":
+        # Бесплатная — сразу к имени и описанию
+        user_state[uid] = {
+            "step": "awaiting_info",
+            "date": date_str,
+            "time": time_str,
+            "type": "free",
+            "duration": "30 мин"
+        }
+        await cb.message.answer(
+            f"✅ *{date_str}* в *{time_str}* МСК\n\n"
+            "Напиши своё *имя* и кратко — *что сейчас происходит*.\n"
+            "Чем больше контекста — тем продуктивнее встреча:",
+            parse_mode="Markdown")
+    else:
+        # Платная — выбор длительности
+        user_state[uid] = {
+            "step": "awaiting_duration",
+            "date": date_str,
+            "time": time_str,
+            "type": "paid"
+        }
+        await cb.message.answer(
+            f"✅ *{date_str}* в *{time_str}* МСК\n\nВыбери длительность сессии:",
+            parse_mode="Markdown", reply_markup=duration_menu())
 @dp.callback_query(F.data.startswith("dur_"))
 async def duration_selected(cb: types.CallbackQuery):
     duration = cb.data[4:]
