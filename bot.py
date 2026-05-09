@@ -1,18 +1,37 @@
 """
-Бот Евгения Касикова — психологические консультации
-Версия 3.0 — финальная
+Бот Евгения Касикова v4.0
 """
 
 import asyncio
 import os
 import shelve
-import hashlib
 import calendar
 import re
+import logging
+import sys
+import io
 from datetime import datetime, date, timedelta
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    EXCEL_OK = True
+except:
+    EXCEL_OK = False
+
+# ========== ЛОГИРОВАНИЕ ==========
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log", encoding="utf-8"),
+    ]
+)
+log = logging.getLogger(__name__)
 
 # ========== КОНФИГУРАЦИЯ ==========
 TOKEN = os.environ.get("BOT_TOKEN", "")
@@ -29,30 +48,34 @@ PLATFORM_LINKS = {
     "MAX": "https://max.ru/joincall/ahmoeViSGUdzx948lSbeXgSXluuzdJW0h3HVmOepwtc",
 }
 
+DURATIONS = ["30 мин", "1 час", "1.5 часа", "2 часа", "2.5 часа", "3 часа"]
+DURATION_SLOTS = {"30 мин": 1, "1 час": 2, "1.5 часа": 3, "2 часа": 4, "2.5 часа": 5, "3 часа": 6}
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# ========== НЕЦЕНЗУРНАЯ ЛЕКСИКА ==========
+# ========== МАТ ==========
 BAD_WORDS = [
-    "блять","бля","блядь","блядина","блядский","хуй","хуйня","хуёво","хуево",
-    "хуёвый","хуевый","хуила","хуило","пиздец","пизда","пиздатый","пизданутый",
-    "пиздануть","пиздить","ёбаный","ёб","еб","ебать","ебёт","ебал","ебаный",
-    "ебанутый","ёбнутый","ёбнуть","ебнуть","ебись","еби","сука","суки","сучка",
-    "сучара","сучий","мудак","мудила","мудачок","мудацкий","залупа","залупиться",
-    "шлюха","шлюшка","пидор","пидорас","пидорасина","гандон","гондон",
-    "ублюдок","ублюдки","долбоёб","долбоеб","долбануться","дрочить","дрочила",
-    "манда","мандавошка","срань","сранье","сраный","жопа","жопный","жопник",
-    "педик","педераст","педрила","нахуй","нахер","ёпт","ёпта","епт","епта",
-    "курва","дерьмо","дерьмовый","fuck","shit","bitch","asshole","cunt","whore",
-    "кака","писька","пися","писю","какашка","залупень","шалава","потаскуха",
+    "блять","бля","блядь","блядина","хуй","хуйня","хуёво","хуево","хуёвый",
+    "хуевый","хуила","хуило","пиздец","пизда","пиздатый","пизданутый","пиздануть",
+    "пиздить","ёбаный","ёб","еб","ебать","ебёт","ебал","ебаный","ебанутый",
+    "ёбнутый","ёбнуть","ебнуть","ебись","еби","сука","суки","сучка","сучара",
+    "мудак","мудила","залупа","шлюха","шлюшка","пидор","пидорас","гандон",
+    "ублюдок","долбоёб","долбоеб","дрочить","дрочила","манда","срань","жопа",
+    "педик","педераст","нахуй","нахер","ёпт","епт","курва","дерьмо",
+    "fuck","shit","bitch","asshole","cunt","whore","кака","писька","шалава",
 ]
 
 def has_bad_words(text):
     t = text.lower()
-    for w in BAD_WORDS:
-        if w in t:
-            return True
-    return False
+    return any(w in t for w in BAD_WORDS)
+
+def is_random_text(text):
+    words = text.split()
+    if not words:
+        return True
+    random_count = sum(1 for w in words if len(w) <= 2 and not w.isalpha())
+    return random_count > len(words) * 0.5
 
 # ========== ХРАНИЛИЩЕ ==========
 DB_FILE = "bot_data"
@@ -66,11 +89,14 @@ def db_set(key, value):
         db[key] = value
 
 def init_db():
-    for key, val in [
+    defaults = [
         ("slots", {}), ("appointments", {}),
         ("admin_chats", []), ("blocked_users", []),
         ("logs", []), ("blocked_dates", []),
-    ]:
+        ("all_users", []), ("violations", {}),
+        ("regular_clients", []),
+    ]
+    for key, val in defaults:
         if db_get(key) is None:
             db_set(key, val)
 
@@ -81,17 +107,25 @@ user_state = {}
 user_flood = {}
 user_flood_count = {}
 
+def track_violation(uid, vtype):
+    violations = db_get("violations", {})
+    key = str(uid)
+    if key not in violations:
+        violations[key] = {"bad_words": 0, "spam": 0, "random": 0}
+    violations[key][vtype] = violations[key].get(vtype, 0) + 1
+    db_set("violations", violations)
+    return violations[key][vtype]
+
 def is_flood(uid):
     now = datetime.now().timestamp()
     last = user_flood.get(uid, 0)
     if now - last < 2:
         cnt = user_flood_count.get(uid, 0) + 1
         user_flood_count[uid] = cnt
-        if cnt > 5:
-            blocked = db_get("blocked_users", [])
-            if uid not in blocked:
-                blocked.append(uid)
-                db_set("blocked_users", blocked)
+        if cnt > 15:
+            count = track_violation(uid, "spam")
+            if count >= 5:
+                auto_block(uid, "спам стартами")
         return True
     user_flood[uid] = now
     user_flood_count[uid] = 0
@@ -100,21 +134,39 @@ def is_flood(uid):
 def is_blocked(uid):
     return uid in db_get("blocked_users", [])
 
+def auto_block(uid, reason):
+    blocked = db_get("blocked_users", [])
+    if uid not in blocked:
+        blocked.append(uid)
+        db_set("blocked_users", blocked)
+        log.warning(f"АВТОБЛОК: {uid} — {reason}")
+        asyncio.create_task(notify_admins(
+            f"🚫 *Автоблок*\nID: {uid}\nПричина: {reason}"
+        ))
+
 def is_admin(username):
     if not username:
         return False
     return username.lower() in [u.lower() for u in ADMIN_USERNAMES]
 
+def register_user(uid):
+    users = db_get("all_users", [])
+    if uid not in users:
+        users.append(uid)
+        db_set("all_users", users)
+
 def log_action(uid, username, action):
     logs = db_get("logs", [])
-    logs.append({
+    entry = {
         "uid": uid, "username": username or "нет",
         "action": action,
-        "time": datetime.now().strftime("%d.%m.%Y %H:%M")
-    })
-    if len(logs) > 500:
-        logs = logs[-500:]
+        "time": datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    }
+    logs.append(entry)
+    if len(logs) > 1000:
+        logs = logs[-1000:]
     db_set("logs", logs)
+    log.info(f"[{entry['time']}] @{entry['username']} (ID:{uid}) — {action}")
 
 # ========== ПОДПИСКА ==========
 async def is_subscribed(user_id):
@@ -132,7 +184,7 @@ async def notify_admins(text, reply_markup=None):
         except:
             pass
 
-# ========== ГЕНЕРАЦИЯ СЛОТОВ ==========
+# ========== СЛОТЫ ==========
 def generate_day_slots():
     slots = []
     cur = datetime.strptime("10:00", "%H:%M")
@@ -144,6 +196,20 @@ def generate_day_slots():
 
 ALL_DAY_SLOTS = generate_day_slots()
 
+def get_free_slots(date_str):
+    slots = db_get("slots", {})
+    appts = db_get("appointments", {})
+    day_slots = slots.get(date_str, [])
+    taken = [r["time"] for r in appts.get(date_str, [])]
+    return [t for t in day_slots if t not in taken]
+
+def has_booking_today(uid, date_str):
+    appts = db_get("appointments", {})
+    for rec in appts.get(date_str, []):
+        if rec["user_id"] == uid:
+            return True
+    return False
+
 # ========== ТЕКСТЫ ==========
 TEXT_ABOUT = """👤 *Обо мне*
 
@@ -151,19 +217,17 @@ TEXT_ABOUT = """👤 *Обо мне*
 
 Я не классический психолог в пиджаке с дипломом на стене. Я человек, который сам прошёл через то, с чем сейчас, скорее всего, пришёл ты.
 
-Двое детей и развод после 15 лет брака. Расставание после пяти лет отношений. Полный финансовый крах. И каждый раз казалось, что мир просто взял и перевернулся. То ощущение утром, когда просыпаешься, смотришь в потолок и думаешь: кто я теперь? Что вообще осталось?
+Двое детей и развод после 15 лет брака. Расставание после пяти лет отношений. Полный финансовый крах. И каждый раз казалось, что мир просто взял и перевернулся.
 
 Я знаю это изнутри. Не по книжкам.
 
-Я из тех, кто привык добиваться результата. Кандидат в мастера спорта по плаванию, семь лет музыкальной школы. Потом 15 лет в найме в продажах: от рядового менеджера до директора по региону. Шесть собственных бизнесов. Флиппинг недвижимости — 10+ лет в рынке, 175+ объектов.
+15 лет в продажах — от менеджера до директора по региону. Шесть собственных бизнесов. Флиппинг недвижимости — 175+ объектов за 10 лет.
 
-А потом всё рухнуло разом. Бизнес, отношения, темп. Деньги, статус, ориентиры. Я упал и разбился в дребезги.
+А потом всё рухнуло разом. Я упал и разбился в дребезги. И не стал делать вид, что всё нормально. Пересобрал себя. Медленно, честно.
 
-И я не стал делать вид, что всё нормально. Пересобрал себя. Медленно, честно, без имитации бодрости.
+Сегодня — более 10 лет практики, более 200 часов личной и групповой терапии, более 200 реальных историй в работе с отношениями.
 
-Сегодня я работаю с людьми в период расставания и развода. За плечами более 10 лет практики и более 200 часов личной и групповой терапии. Более 200 реальных историй в работе с отношениями.
-
-Я говорю на твоём языке. Смотрю не сверху — а рядом. Потому что я там был. И я знаю, что из этого выходят.
+Я говорю на твоём языке. Смотрю не сверху — а рядом. Потому что я там был.
 
 👉 @kasikovevgenii"""
 
@@ -175,48 +239,35 @@ TEXT_HOW_1 = """⚙️ *Как я работаю*
 
 Я помогаю тебе увидеть то, что ты сам не видишь. Твои паттерны, автоматические реакции, то как ты строишь отношения. Задаю вопросы — иногда неудобные. Не осуждаю — но и не сюсюкаю.
 
-Решения всегда остаются за тобой. Работа идёт в живых сессиях — не в переписке. Завершить можно в любой момент.
+Решения всегда остаются за тобой. Работа идёт в живых сессиях — не в переписке.
 
-Я работаю *интегративно* — выбираю конкретный метод под конкретного человека, под его состояние и этап. Не смешиваю всё подряд — а выбираю то, что работает именно здесь и сейчас."""
+Я работаю *интегративно* — выбираю конкретный метод под конкретного человека, под его состояние и этап."""
 
-TEXT_HOW_2 = """*НЛП*
-Первые недели после расставания — хаос в голове. Одна и та же картинка прокручивается по кругу. НЛП работает с тем, как ты воспринимаешь произошедшее — меняет не событие, а то, как оно живёт внутри.
+TEXT_HOW_2 = """*НЛП* — хаос в голове в первые недели. Меняет не событие, а то как оно живёт внутри.
 
-*Транзактный анализ (Эрик Бёрн)*
-Почему снова похожая ситуация, похожая женщина, похожий финал. Смотрим из какого эго-состояния ты живёшь в отношениях — из Родителя, Ребёнка или Взрослого.
+*Транзактный анализ (Эрик Бёрн)* — почему снова похожая ситуация. Из какого эго-состояния ты живёшь в отношениях.
 
-*Психология привязанности*
-Почему расставание бьёт так сильно — это не слабость. Это твой тип привязанности, сформированный очень давно. Когда понимаешь свой паттерн — перестаёшь себя винить.
+*Психология привязанности* — почему так больно. Это не слабость — это твой тип привязанности.
 
-*EMDR*
-Измена, предательство, внезапный уход — это травма. EMDR работает с тем, что застряло и не переваривается — воспоминания которые возвращаются снова и снова.
+*EMDR* — измена, предательство, внезапный уход. Работает с тем что застряло и не переваривается.
 
-*Работа с телом*
-Боль после расставания живёт не только в голове. Сжатие в груди, тяжесть, невозможность дышать полно. Работа с телесными реакциями помогает добраться до того, что словами не выражается.
+*Работа с телом* — боль живёт не только в голове. Сжатие в груди, тяжесть, невозможность дышать полно.
 
-*Гештальт*
-Незавершённые разговоры, невысказанное, то что так и осталось внутри. Гештальт работает в настоящем моменте — завершает прошлое."""
+*Гештальт* — незавершённые разговоры, невысказанное. Завершает прошлое через настоящий момент."""
 
-TEXT_HOW_3 = """*IFS — работа с частями личности*
-Одна часть хочет вернуться — другая знает что нельзя. Одна злится — другая скучает. Работа с частями помогает перестать воевать с собой и начать слышать что каждая из них на самом деле хочет.
+TEXT_HOW_3 = """*IFS — части личности* — одна часть хочет вернуться, другая знает что нельзя. Помогает перестать воевать с собой.
 
-*Схема-терапия*
-Глубокие убеждения — «я недостаточно хорош», «меня всё равно бросят», «доверять нельзя». Они сформировались рано и тянут в одни и те же ситуации.
+*Схема-терапия* — «я недостаточно хорош», «меня всё равно бросят». Сформировались рано, тянут в одни и те же ситуации.
 
-*Юнгианский подход*
-Когда не можешь отпустить — часто дело не в том человеке, а в том что ты видел в нём. Возвращаем это золото себе. Тогда отпускание происходит само.
+*Юнгианский подход* — когда не можешь отпустить. Возвращаем своё золото себе.
 
-*Психодинамический подход*
-Почему ты выбираешь именно таких людей, почему реагируешь именно так — работаем с бессознательными паттернами.
+*Психодинамический подход* — почему ты выбираешь именно таких людей.
 
-*Травма-информированный подход*
-Работаю аккуратно — не ломлюсь в то, к чему ты ещё не готов.
+*Травма-информированный подход* — работаю аккуратно, не ломлюсь в то к чему ты ещё не готов.
 
-*Экзистенциальный подход*
-После развода многие теряют не только партнёра — они теряют себя. Кризис идентичности — это нормально. Находим новую опору внутри.
+*Экзистенциальный подход* — кризис идентичности после развода — это нормально.
 
-*Мужская психология*
-Мужчины горюют иначе, восстанавливаются иначе, просят о помощи иначе. Я это учитываю — и не работаю с тобой как с универсальным клиентом."""
+*Мужская психология* — мужчины горюют иначе, восстанавливаются иначе. Я это учитываю."""
 
 TEXT_PRICE = """💼 *Условия платных консультаций*
 
@@ -229,9 +280,9 @@ _экономия 5 000 руб._
 
 Работаю по видео — Zoom, ВКонтакте, Яндекс Телемост, Google Meet, Teams, MAX.
 
-После первой бесплатной встречи ты сам решаешь — продолжать или нет. Никакого давления.
+После первой бесплатной встречи ты сам решаешь — продолжать или нет.
 
-Для записи и вопросов: @kasikovevgenii"""
+Для записи: @kasikovevgenii"""
 
 TEXT_FREE_1 = """Здравствуйте. Спасибо, что написали — решиться на первый шаг бывает непросто.
 
@@ -274,33 +325,48 @@ def back_main_kb():
 
 def paid_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 Записаться на платную",
-                              callback_data="book_paid")],
+        [InlineKeyboardButton(text="📅 Записаться", callback_data="book_paid")],
         [InlineKeyboardButton(text="↩️ Назад", callback_data="back_main")],
     ])
+
+def duration_menu():
+    rows = []
+    for d in DURATIONS:
+        rows.append([InlineKeyboardButton(text=d, callback_data=f"dur_{d}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def platform_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎥 Zoom", callback_data="platform_Zoom")],
         [InlineKeyboardButton(text="📱 ВКонтакте", callback_data="platform_ВКонтакте")],
-        [InlineKeyboardButton(text="💻 Яндекс Телемост", callback_data="platform_Яндекс Телемост")],
+        [InlineKeyboardButton(text="💻 Яндекс Телемост",
+                              callback_data="platform_Яндекс Телемост")],
         [InlineKeyboardButton(text="📹 Google Meet", callback_data="platform_Google Meet")],
-        [InlineKeyboardButton(text="🖥 Microsoft Teams", callback_data="platform_Microsoft Teams")],
+        [InlineKeyboardButton(text="🖥 Microsoft Teams",
+                              callback_data="platform_Microsoft Teams")],
         [InlineKeyboardButton(text="📲 MAX", callback_data="platform_MAX")],
     ])
 
 def admin_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Добавить слоты", callback_data="adm_add")],
-        [InlineKeyboardButton(text="📅 Открыть весь день", callback_data="adm_open_day")],
-        [InlineKeyboardButton(text="🗓 Открыть неделю", callback_data="adm_open_week")],
+        [InlineKeyboardButton(text="📅 Открыть весь день",
+                              callback_data="adm_open_day")],
+        [InlineKeyboardButton(text="🗓 Открыть неделю",
+                              callback_data="adm_open_week")],
         [InlineKeyboardButton(text="❌ Закрыть день", callback_data="adm_close_day")],
-        [InlineKeyboardButton(text="🚫 Заблокировать диапазон дат", callback_data="adm_block_range")],
+        [InlineKeyboardButton(text="🚫 Заблокировать диапазон дат",
+                              callback_data="adm_block_range")],
         [InlineKeyboardButton(text="🔄 Перенести запись", callback_data="adm_move")],
+        [InlineKeyboardButton(text="👥 Постоянные клиенты",
+                              callback_data="adm_regular")],
         [InlineKeyboardButton(text="📋 Все записи", callback_data="adm_list")],
         [InlineKeyboardButton(text="📅 Мои слоты", callback_data="adm_slots")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats")],
-        [InlineKeyboardButton(text="🚫 Заблокированные", callback_data="adm_blocked")],
+        [InlineKeyboardButton(text="📤 Рассылка всем", callback_data="adm_broadcast")],
+        [InlineKeyboardButton(text="📊 Excel отчёт", callback_data="adm_excel")],
+        [InlineKeyboardButton(text="🚫 Заблокированные",
+                              callback_data="adm_blocked")],
         [InlineKeyboardButton(text="📊 Логи", callback_data="adm_logs")],
     ])
 
@@ -327,10 +393,10 @@ def user_calendar(year, month):
                 d = date(year, month, day)
                 ds = d.strftime("%Y-%m-%d")
                 if d < today or ds in blocked_dates:
-                    row.append(InlineKeyboardButton(text="·", callback_data="ignore"))
+                    row.append(InlineKeyboardButton(text="·",
+                                                    callback_data="ignore"))
                 else:
-                    free = [t for t in slots.get(ds, [])
-                            if t not in [r["time"] for r in appts.get(ds, [])]]
+                    free = get_free_slots(ds)
                     if free:
                         row.append(InlineKeyboardButton(
                             text=f"✅{day}", callback_data=f"day_{ds}"))
@@ -339,12 +405,13 @@ def user_calendar(year, month):
                             text=str(day), callback_data="no_slots"))
         keyboard.append(row)
     nav = []
-    pm = month-1 if month>1 else 12
-    py = year if month>1 else year-1
-    nm = month+1 if month<12 else 1
-    ny = year if month<12 else year+1
+    pm = month-1 if month > 1 else 12
+    py = year if month > 1 else year-1
+    nm = month+1 if month < 12 else 1
+    ny = year if month < 12 else year+1
     if date(py, pm, 1) >= today.replace(day=1):
-        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"cal_{py}_{pm}"))
+        nav.append(InlineKeyboardButton(text="◀️",
+                                        callback_data=f"cal_{py}_{pm}"))
     else:
         nav.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
     nav.append(InlineKeyboardButton(text="❌", callback_data="close_cal"))
@@ -373,6 +440,46 @@ def slots_menu(date_str):
                                           callback_data="back_main")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+# ========== EXCEL ==========
+def generate_excel(date_from, date_to):
+    if not EXCEL_OK:
+        return None
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Записи"
+    headers = ["Дата", "Время", "Тип", "Имя", "Username",
+               "Платформа", "Длительность", "Описание"]
+    header_fill = PatternFill("solid", fgColor="2E86AB")
+    header_font = Font(color="FFFFFF", bold=True)
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+    appts = db_get("appointments", {})
+    row = 2
+    for ds in sorted(appts.keys()):
+        if ds < date_from or ds > date_to:
+            continue
+        for rec in appts[ds]:
+            ws.cell(row=row, column=1, value=ds)
+            ws.cell(row=row, column=2, value=rec.get("time", ""))
+            ws.cell(row=row, column=3,
+                    value="Платная" if rec.get("type") == "paid" else "Бесплатная")
+            ws.cell(row=row, column=4, value=rec.get("name", ""))
+            ws.cell(row=row, column=5, value=f"@{rec.get('username', '')}")
+            ws.cell(row=row, column=6, value=rec.get("platform", ""))
+            ws.cell(row=row, column=7, value=rec.get("duration", ""))
+            ws.cell(row=row, column=8, value=rec.get("description", ""))
+            row += 1
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=0)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
 # ========== НАПОМИНАНИЯ ==========
 async def reminder_loop():
     while True:
@@ -380,56 +487,62 @@ async def reminder_loop():
         try:
             now = datetime.now()
             appts = db_get("appointments", {})
+            changed = False
             for ds, records in appts.items():
                 for rec in records:
                     try:
-                        appt_dt = datetime.strptime(f"{ds} {rec['time']}", "%Y-%m-%d %H:%M")
+                        appt_dt = datetime.strptime(
+                            f"{ds} {rec['time']}", "%Y-%m-%d %H:%M")
                     except:
                         continue
                     diff = (appt_dt - now).total_seconds() / 60
-
-                    # Клиенту за 60 минут
-                    if 59 <= diff <= 61 and not rec.get("reminded_client"):
+                    if 59 <= diff <= 61:
                         platform = rec.get("platform", "")
                         link = PLATFORM_LINKS.get(platform, "")
-                        try:
-                            await bot.send_message(
-                                rec["user_id"],
-                                f"⏰ Напоминание!\n\n"
-                                f"Через час наша встреча — {rec['time']} МСК\n"
-                                f"Платформа: {platform}\n"
-                                f"{'Ссылка: ' + link if link else ''}\n\n"
-                                f"Если что-то изменилось — напишите: @kasikovevgenii"
+                        if not rec.get("reminded_client"):
+                            try:
+                                await bot.send_message(
+                                    rec["user_id"],
+                                    f"⏰ Напоминание!\n\n"
+                                    f"Через час наша встреча — {rec['time']} МСК\n"
+                                    f"Платформа: {platform}\n"
+                                    f"{'🔗 ' + link if link else ''}\n\n"
+                                    "Если что-то изменилось — напишите: "
+                                    "@kasikovevgenii"
+                                )
+                                rec["reminded_client"] = True
+                                changed = True
+                            except:
+                                pass
+                        if not rec.get("reminded_admin"):
+                            type_label = ("💼 Платная" if rec.get("type") == "paid"
+                                          else "🆓 Бесплатная")
+                            await notify_admins(
+                                f"⏰ *Через час консультация!*\n\n"
+                                f"📅 {ds} в {rec['time']} МСК\n"
+                                f"{type_label}\n"
+                                f"👤 {rec.get('name','—')}\n"
+                                f"📱 {platform}\n"
+                                f"⏱ {rec.get('duration','—')}\n"
+                                f"🆔 @{rec.get('username','—')}"
                             )
-                            rec["reminded_client"] = True
-                        except:
-                            pass
-
-                    # Евгению за 60 минут
-                    if 59 <= diff <= 61 and not rec.get("reminded_admin"):
-                        type_label = "💼 Платная" if rec.get("type") == "paid" else "🆓 Бесплатная"
-                        await notify_admins(
-                            f"⏰ *Через час консультация!*\n\n"
-                            f"📅 {ds} в {rec['time']} МСК\n"
-                            f"{type_label}\n"
-                            f"👤 {rec['name']}\n"
-                            f"📱 {rec.get('platform', '—')}\n"
-                            f"🆔 @{rec.get('username', '—')}"
-                        )
-                        rec["reminded_admin"] = True
-
-            db_set("appointments", appts)
-        except:
-            pass
+                            rec["reminded_admin"] = True
+                            changed = True
+            if changed:
+                db_set("appointments", appts)
+        except Exception as e:
+            log.error(f"reminder_loop: {e}")
 
 # ========== ХЭНДЛЕРЫ ==========
 
 @dp.message(Command("start"))
 async def start(msg: types.Message):
-    if is_blocked(msg.from_user.id): return
-    if is_flood(msg.from_user.id): return
+    if is_blocked(msg.from_user.id):
+        return
+    if is_flood(msg.from_user.id):
+        return
+    register_user(msg.from_user.id)
     log_action(msg.from_user.id, msg.from_user.username, "/start")
-    # Регистрируем админов автоматически
     if is_admin(msg.from_user.username):
         chats = db_get("admin_chats", [])
         if msg.from_user.id not in chats:
@@ -441,6 +554,25 @@ async def start(msg: types.Message):
         "и с пониманием что делать дальше.\n\nЧто тебя интересует?",
         reply_markup=main_menu()
     )
+
+@dp.message(Command("admin"))
+async def admin_cmd(msg: types.Message):
+    if not is_admin(msg.from_user.username):
+        return
+    chats = db_get("admin_chats", [])
+    if msg.from_user.id not in chats:
+        chats.append(msg.from_user.id)
+        db_set("admin_chats", chats)
+    await msg.answer("🔐 *Панель администратора*",
+                     parse_mode="Markdown", reply_markup=admin_menu())
+
+@dp.message(Command("stop"))
+async def stop_cmd(msg: types.Message):
+    if not is_admin(msg.from_user.username):
+        return
+    await msg.answer("🛑 Бот останавливается...")
+    log.info("БОТ ОСТАНОВЛЕН командой /stop")
+    await dp.stop_polling()
 
 @dp.callback_query(F.data == "about")
 async def about(cb: types.CallbackQuery):
@@ -473,7 +605,7 @@ async def get_guide(cb: types.CallbackQuery):
     await cb.answer()
     log_action(cb.from_user.id, cb.from_user.username, "get_guide")
     sub_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Подписаться на канал",
+        [InlineKeyboardButton(text="📢 Подписаться",
                               url=f"https://t.me/{CHANNEL.lstrip('@')}")],
         [InlineKeyboardButton(text="✅ Я подписался",
                               callback_data="check_sub_guide")],
@@ -481,9 +613,8 @@ async def get_guide(cb: types.CallbackQuery):
     await cb.message.answer(
         "📄 *Гайд «4 шага выхода из расставания»* — 30 страниц практики.\n\n"
         "Чтобы получить — подпишись на канал. Там я каждый день разбираю "
-        "реальные ситуации и делюсь инструментами которые реально работают 👇",
-        parse_mode="Markdown", reply_markup=sub_kb
-    )
+        "реальные ситуации 👇",
+        parse_mode="Markdown", reply_markup=sub_kb)
 
 @dp.callback_query(F.data == "check_sub_guide")
 async def check_sub_guide(cb: types.CallbackQuery):
@@ -492,16 +623,15 @@ async def check_sub_guide(cb: types.CallbackQuery):
         await cb.message.delete()
         await cb.message.answer(
             f"✅ Держи гайд!\n\n👉 {LEADMAGNET_URL}\n\n"
-            "Если захочешь разобрать свою ситуацию лично — "
+            "Если захочешь разобрать ситуацию лично — "
             "провожу бесплатную 30-минутную консультацию 👇",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="1️⃣ Записаться на бесплатную",
-                                      callback_data="free_consult")]
-            ])
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="1️⃣ Записаться на бесплатную",
+                                     callback_data="free_consult")
+            ]])
         )
     else:
-        await cb.answer("❌ Подписка не найдена. Подпишись и нажми снова.",
-                        show_alert=True)
+        await cb.answer("❌ Подписка не найдена.", show_alert=True)
 
 @dp.callback_query(F.data == "paid_consult")
 async def paid_consult(cb: types.CallbackQuery):
@@ -517,8 +647,7 @@ async def book_paid(cb: types.CallbackQuery):
     user_state[uid] = {"type": "paid"}
     await cb.message.answer(
         "Выбери удобную дату 👇\n✅ — есть свободные слоты",
-        reply_markup=user_calendar(date.today().year, date.today().month)
-    )
+        reply_markup=user_calendar(date.today().year, date.today().month))
 
 @dp.callback_query(F.data == "free_consult")
 async def free_consult(cb: types.CallbackQuery):
@@ -542,7 +671,17 @@ async def slot_taken_cb(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("day_"))
 async def day_selected(cb: types.CallbackQuery):
     date_str = cb.data[4:]
-    log_action(cb.from_user.id, cb.from_user.username, f"day_{date_str}")
+    uid = cb.from_user.id
+    if has_booking_today(uid, date_str):
+        await cb.answer(
+            "У вас уже есть запись на этот день. "
+            "Для изменения напишите @kasikovevgenii",
+            show_alert=True)
+        return
+    state = user_state.get(uid, {})
+    state["date"] = date_str
+    user_state[uid] = state
+    log_action(uid, cb.from_user.username, f"day_{date_str}")
     await cb.message.delete()
     await cb.message.answer(
         f"📅 *{date_str}*\n\nВыбери время:\n🟢 свободно  🔴 занято",
@@ -573,21 +712,32 @@ async def slot_selected(cb: types.CallbackQuery):
     uid = cb.from_user.id
     consult_type = user_state.get(uid, {}).get("type", "free")
     user_state[uid] = {
-        "step": "awaiting_info",
+        "step": "awaiting_duration",
         "date": date_str,
         "time": time_str,
         "type": consult_type
     }
     log_action(uid, cb.from_user.username, f"slot_{date_str}_{time_str}")
     await cb.message.delete()
-    type_label = "💼 платная" if consult_type == "paid" else "🆓 бесплатная"
     await cb.message.answer(
-        f"✅ *{date_str}* в *{time_str}* МСК ({type_label})\n\n"
+        f"✅ *{date_str}* в *{time_str}* МСК\n\nВыбери длительность сессии:",
+        parse_mode="Markdown", reply_markup=duration_menu())
+
+@dp.callback_query(F.data.startswith("dur_"))
+async def duration_selected(cb: types.CallbackQuery):
+    duration = cb.data[4:]
+    uid = cb.from_user.id
+    state = user_state.get(uid, {})
+    state["duration"] = duration
+    state["step"] = "awaiting_info"
+    user_state[uid] = state
+    type_label = "💼 платная" if state.get("type") == "paid" else "🆓 бесплатная"
+    await cb.message.answer(
+        f"⏱ Длительность: *{duration}* ({type_label})\n\n"
         "Напиши своё *имя* и кратко — *что сейчас происходит*.\n"
-        "Чем больше контекста — тем лучше подготовлюсь к встрече:",
+        "Чем больше контекста — тем продуктивнее встреча:",
         parse_mode="Markdown")
 
-# ========== ВЫБОР ПЛАТФОРМЫ ==========
 @dp.callback_query(F.data.startswith("platform_"))
 async def platform_selected(cb: types.CallbackQuery):
     platform = cb.data[9:]
@@ -599,6 +749,7 @@ async def platform_selected(cb: types.CallbackQuery):
     date_str = state["date"]
     time_str = state["time"]
     consult_type = state.get("type", "free")
+    duration = state.get("duration", "—")
     type_label = "💼 Платная" if consult_type == "paid" else "🆓 Бесплатная"
     confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подтвердить запись",
@@ -609,12 +760,32 @@ async def platform_selected(cb: types.CallbackQuery):
     await cb.message.answer(
         f"📋 *Проверь данные:*\n\n"
         f"📅 {date_str} в {time_str} МСК\n"
-        f"{type_label}\n"
+        f"{type_label} | ⏱ {duration}\n"
         f"👤 _{state.get('name', '—')}_\n"
         f"📱 {platform}\n\nВсё верно?",
         parse_mode="Markdown", reply_markup=confirm_kb)
 
-# ========== ПОДТВЕРЖДЕНИЕ ЗАПИСИ ==========
+@dp.callback_query(F.data == "extend_description")
+async def extend_description(cb: types.CallbackQuery):
+    uid = cb.from_user.id
+    state = user_state.get(uid, {})
+    state["step"] = "awaiting_info_retry"
+    user_state[uid] = state
+    await cb.message.answer(
+        "Пожалуйста, расскажи подробнее — это поможет провести встречу "
+        "более продуктивно:")
+
+@dp.callback_query(F.data == "keep_description")
+async def keep_description(cb: types.CallbackQuery):
+    uid = cb.from_user.id
+    state = user_state.get(uid, {})
+    state["step"] = "platform"
+    user_state[uid] = state
+    await cb.answer()
+    await cb.message.answer(
+        "Через какую платформу удобнее созвониться?",
+        reply_markup=platform_menu())
+
 @dp.callback_query(F.data.startswith("confirm_"))
 async def confirm_booking(cb: types.CallbackQuery):
     uid = cb.from_user.id
@@ -627,6 +798,8 @@ async def confirm_booking(cb: types.CallbackQuery):
     name = state.get("name", "—")
     consult_type = state.get("type", "free")
     platform = state.get("platform", "—")
+    duration = state.get("duration", "—")
+    description = state.get("description", "—")
     appts = db_get("appointments", {})
     if date_str not in appts:
         appts[date_str] = []
@@ -634,6 +807,7 @@ async def confirm_booking(cb: types.CallbackQuery):
         "user_id": uid, "name": name, "time": time_str,
         "username": cb.from_user.username or "нет",
         "type": consult_type, "platform": platform,
+        "duration": duration, "description": description,
         "reminded_client": False, "reminded_admin": False
     })
     db_set("appointments", appts)
@@ -643,7 +817,8 @@ async def confirm_booking(cb: types.CallbackQuery):
     await cb.message.answer(
         f"✅ Запись принята!\n\n"
         f"📅 {date_str} в {time_str} МСК\n"
-        f"{type_label} | {platform}\n\n"
+        f"{type_label} | ⏱ {duration}\n"
+        f"📱 {platform}\n\n"
         "Евгений свяжется для подтверждения:\n"
         "👉 @kasikovevgenii"
     )
@@ -656,12 +831,11 @@ async def confirm_booking(cb: types.CallbackQuery):
     await notify_admins(
         f"🔔 *Новая запись!*\n"
         f"📅 {date_str} в {time_str} МСК\n"
-        f"{type_label}\n"
-        f"👤 {name}\n"
-        f"📱 {platform}\n"
+        f"{type_label} | ⏱ {duration}\n"
+        f"👤 {name}\n📱 {platform}\n"
+        f"💬 {description[:100]}\n"
         f"🆔 @{cb.from_user.username or 'нет'} | ID: {uid}",
-        reply_markup=confirm_kb
-    )
+        reply_markup=confirm_kb)
 
 @dp.callback_query(F.data.startswith("adm_ok_"))
 async def adm_ok(cb: types.CallbackQuery):
@@ -669,7 +843,6 @@ async def adm_ok(cb: types.CallbackQuery):
     uid = int(parts[2])
     date_str = parts[3]
     time_str = parts[4]
-    # Находим запись и отправляем ссылку
     appts = db_get("appointments", {})
     platform = "—"
     for rec in appts.get(date_str, []):
@@ -678,19 +851,16 @@ async def adm_ok(cb: types.CallbackQuery):
             break
     link = PLATFORM_LINKS.get(platform, "")
     try:
-        await bot.send_message(
-            uid,
+        await bot.send_message(uid,
             f"✅ Ваша запись подтверждена!\n\n"
             f"📅 {date_str} в {time_str} МСК\n"
-            f"📱 Платформа: {platform}\n"
-            f"{'🔗 Ссылка: ' + link if link else ''}\n\n"
-            f"Если понадобится перенос — напишите: @kasikovevgenii"
-        )
+            f"📱 {platform}\n"
+            f"{'🔗 ' + link if link else ''}\n\n"
+            "Если понадобится перенос: @kasikovevgenii")
     except:
         pass
     await cb.message.edit_text(
-        cb.message.text + "\n\n✅ *Подтверждено — ссылка отправлена*",
-        parse_mode="Markdown")
+        cb.message.text + "\n\n✅ *Подтверждено*", parse_mode="Markdown")
 
 @dp.callback_query(F.data.startswith("adm_cancel_"))
 async def adm_cancel(cb: types.CallbackQuery):
@@ -725,48 +895,75 @@ async def skip_user_cb(cb: types.CallbackQuery):
 async def adm_add(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     user_state[cb.from_user.id] = {"step": "adm_date"}
-    await cb.message.answer(
-        "Введи дату *ГГГГ-ММ-ДД*\nПример: `2026-05-22`",
-        parse_mode="Markdown")
+    await cb.message.answer("Введи дату *ГГГГ-ММ-ДД*:", parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_open_day")
 async def adm_open_day(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     user_state[cb.from_user.id] = {"step": "adm_open_day_date"}
-    await cb.message.answer(
-        "Введи дату для открытия *всех слотов* (10:00-21:00):\n`2026-05-22`",
-        parse_mode="Markdown")
+    await cb.message.answer("Дата для открытия всех слотов *ГГГГ-ММ-ДД*:",
+                             parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_open_week")
 async def adm_open_week(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     user_state[cb.from_user.id] = {"step": "adm_week_start"}
-    await cb.message.answer(
-        "Введи дату *начала* недели:\n`2026-05-22`",
-        parse_mode="Markdown")
+    await cb.message.answer("Дата *начала* недели *ГГГГ-ММ-ДД*:",
+                             parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_close_day")
 async def adm_close_day(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     user_state[cb.from_user.id] = {"step": "adm_close_day_date"}
-    await cb.message.answer(
-        "Введи дату для *закрытия* всех слотов:\n`2026-05-22`",
-        parse_mode="Markdown")
+    await cb.message.answer("Дата для закрытия *ГГГГ-ММ-ДД*:",
+                             parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_block_range")
 async def adm_block_range(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     user_state[cb.from_user.id] = {"step": "adm_block_start"}
-    await cb.message.answer(
-        "Введи дату *начала* блокировки (отпуск/выходные):\n`2026-05-22`",
-        parse_mode="Markdown")
+    await cb.message.answer("Дата *начала* блокировки *ГГГГ-ММ-ДД*:",
+                             parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_move")
 async def adm_move(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     user_state[cb.from_user.id] = {"step": "adm_move_find"}
+    await cb.message.answer("Введи ID пользователя для переноса:")
+
+@dp.callback_query(F.data == "adm_regular")
+async def adm_regular(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    clients = db_get("regular_clients", [])
+    text = "👥 *Постоянные клиенты:*\n\n"
+    if clients:
+        for c in clients:
+            text += f"@{c['username']} — {c['day']} в {c['time']}\n"
+    else:
+        text += "Нет постоянных клиентов."
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Добавить",
+                              callback_data="adm_regular_add")],
+        [InlineKeyboardButton(text="🗑 Удалить",
+                              callback_data="adm_regular_del")],
+        [InlineKeyboardButton(text="↩️ Назад", callback_data="adm_back")],
+    ])
+    await cb.message.answer(text, parse_mode="Markdown", reply_markup=kb)
+
+@dp.callback_query(F.data == "adm_regular_add")
+async def adm_regular_add(cb: types.CallbackQuery):
+    user_state[cb.from_user.id] = {"step": "adm_reg_username"}
     await cb.message.answer(
-        "Введи ID пользователя для переноса записи:")
+        "Введи username клиента (без @):")
+
+@dp.callback_query(F.data == "adm_regular_del")
+async def adm_regular_del(cb: types.CallbackQuery):
+    user_state[cb.from_user.id] = {"step": "adm_reg_del"}
+    await cb.message.answer("Введи username для удаления (без @):")
+
+@dp.callback_query(F.data == "adm_back")
+async def adm_back(cb: types.CallbackQuery):
+    await cb.message.answer("Панель:", reply_markup=admin_menu())
 
 @dp.callback_query(F.data == "adm_list")
 async def adm_list(cb: types.CallbackQuery):
@@ -783,15 +980,15 @@ async def adm_list(cb: types.CallbackQuery):
         if d < today: continue
         for r in appts[ds]:
             t = "💼" if r.get("type") == "paid" else "🆓"
-            text += (f"{t} *{ds}* {r['time']}\n"
-                     f"👤 {r['name']} | @{r['username']}\n"
+            text += (f"{t} *{ds}* {r['time']} ⏱{r.get('duration','—')}\n"
+                     f"👤 {r['name']} @{r['username']}\n"
                      f"📱 {r.get('platform','—')}\n\n")
             found = True
     if not found: text = "📭 Записей нет."
     await cb.message.answer(text, parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_slots")
-async def adm_slots(cb: types.CallbackQuery):
+async def adm_slots_cb(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     slots = db_get("slots", {})
     appts = db_get("appointments", {})
@@ -805,7 +1002,8 @@ async def adm_slots(cb: types.CallbackQuery):
             continue
         if d < today: continue
         taken = [r["time"] for r in appts.get(ds, [])]
-        lines = [f"  {'🔴' if t in taken else '🟢'} {t}" for t in slots[ds]]
+        lines = [f"  {'🔴' if t in taken else '🟢'} {t}"
+                 for t in slots[ds]]
         text += f"*{ds}*\n" + "\n".join(lines) + "\n\n"
         found = True
     if not found: text = "Слотов нет."
@@ -817,31 +1015,43 @@ async def adm_stats(cb: types.CallbackQuery):
     appts = db_get("appointments", {})
     logs = db_get("logs", [])
     now = datetime.now()
-    month = now.month
-    year = now.year
-    total = free_count = paid_count = 0
+    total = free_c = paid_c = 0
     for ds, records in appts.items():
         try:
             d = datetime.strptime(ds, "%Y-%m-%d")
         except:
             continue
-        if d.month == month and d.year == year:
+        if d.month == now.month and d.year == now.year:
             for r in records:
                 total += 1
                 if r.get("type") == "paid":
-                    paid_count += 1
+                    paid_c += 1
                 else:
-                    free_count += 1
+                    free_c += 1
     guides = sum(1 for l in logs if l.get("action") == "got_guide")
+    users = len(db_get("all_users", []))
     await cb.message.answer(
         f"📊 *Статистика за {now.strftime('%B %Y')}:*\n\n"
         f"📅 Всего записей: {total}\n"
-        f"🆓 Бесплатных: {free_count}\n"
-        f"💼 Платных: {paid_count}\n"
+        f"🆓 Бесплатных: {free_c}\n"
+        f"💼 Платных: {paid_c}\n"
         f"📄 Гайдов выдано: {guides}\n"
-        f"👥 Действий в логах: {len(logs)}",
-        parse_mode="Markdown"
-    )
+        f"👥 Всего пользователей: {users}",
+        parse_mode="Markdown")
+
+@dp.callback_query(F.data == "adm_broadcast")
+async def adm_broadcast(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    user_state[cb.from_user.id] = {"step": "adm_broadcast_text"}
+    await cb.message.answer("Введи текст рассылки — он уйдёт всем пользователям:")
+
+@dp.callback_query(F.data == "adm_excel")
+async def adm_excel(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    user_state[cb.from_user.id] = {"step": "adm_excel_from"}
+    await cb.message.answer(
+        "Введи дату *начала* периода *ГГГГ-ММ-ДД*:",
+        parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_blocked")
 async def adm_blocked(cb: types.CallbackQuery):
@@ -852,7 +1062,7 @@ async def adm_blocked(cb: types.CallbackQuery):
         return
     text = "🚫 *Заблокированные:*\n\n" + "\n".join(str(u) for u in blocked)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🔓 Разблокировать по ID",
+        InlineKeyboardButton(text="🔓 Разблокировать",
                              callback_data="adm_unblock_ask")
     ]])
     await cb.message.answer(text, parse_mode="Markdown", reply_markup=kb)
@@ -881,23 +1091,21 @@ async def handle_text(msg: types.Message):
     text = msg.text.strip() if msg.text else ""
     if is_blocked(uid): return
     if is_flood(uid): return
+    register_user(uid)
 
-    # Автоматически регистрируем админа
     if is_admin(msg.from_user.username):
         chats = db_get("admin_chats", [])
         if uid not in chats:
             chats.append(uid)
             db_set("admin_chats", chats)
 
-    # Команда /admin для админов
-    if text == "/admin" and is_admin(msg.from_user.username):
-        await msg.answer("🔐 *Панель администратора*",
-                         parse_mode="Markdown", reply_markup=admin_menu())
-        return
-
     # Мат
     if has_bad_words(text):
+        count = track_violation(uid, "bad_words")
         await msg.answer("Пожалуйста, давайте общаться без грубостей 🙏")
+        if count >= 5:
+            auto_block(uid, f"нецензурная лексика ({count} раз)")
+            return
         block_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🚫 Заблокировать",
                                   callback_data=f"block_user_{uid}")],
@@ -905,18 +1113,59 @@ async def handle_text(msg: types.Message):
                                   callback_data=f"skip_user_{uid}")],
         ])
         await notify_admins(
-            f"⚠️ *Нецензурная лексика*\n"
+            f"⚠️ *Нецензурная лексика* (нарушение {count}/5)\n"
             f"👤 @{msg.from_user.username or 'нет'} (ID: {uid})\n"
             f"💬 {text[:200]}",
             reply_markup=block_kb)
         return
 
+    # Рандомный текст
+    if is_random_text(text) and len(text) < 10:
+        count = track_violation(uid, "random")
+        if count >= 5:
+            auto_block(uid, f"рандомные символы ({count} раз)")
+        return
+
     state = user_state.get(uid, {})
 
-    # Ждём имя и ситуацию
-    if state.get("step") == "awaiting_info":
-        state["name"] = text
+    # Ждём имя и описание
+    if state.get("step") in ("awaiting_info", "awaiting_info_retry"):
+        # Валидация имени
+        words = text.split()
+        has_valid_name = (
+            len(words) >= 2 and
+            all(re.match(r'^[а-яёА-ЯЁa-zA-Z\-]+$', w) for w in words[:2])
+        )
+        if not has_valid_name and state.get("step") == "awaiting_info":
+            await msg.answer(
+                "Пожалуйста, напиши своё *имя* (минимум имя и фамилия) "
+                "и что сейчас происходит:",
+                parse_mode="Markdown")
+            return
+
+        # Проверка длины описания
+        full_text = text
+        if len(full_text) < 35:
+            state["name"] = words[0] if words else text
+            state["description_draft"] = full_text
+            user_state[uid] = state
+            short_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✏️ Дополнить",
+                                      callback_data="extend_description")],
+                [InlineKeyboardButton(text="✅ Оставить как есть",
+                                      callback_data="keep_description")],
+            ])
+            await msg.answer(
+                "Вижу, вы написали довольно мало 🙂\n\n"
+                "Пожалуйста, напишите поподробнее — "
+                "чтобы сессия прошла более продуктивно.",
+                reply_markup=short_kb)
+            return
+
+        state["name"] = " ".join(words[:2]) if len(words) >= 2 else words[0]
+        state["description"] = full_text
         state["step"] = "platform"
+        user_state[uid] = state
         await msg.answer(
             "Через какую платформу удобнее созвониться?",
             reply_markup=platform_menu())
@@ -929,13 +1178,14 @@ async def handle_text(msg: types.Message):
             return
         user_state[uid] = {"step": "adm_times", "adm_date": text}
         await msg.answer(
-            f"Дата: *{text}*\nВведи слоты через запятую:\n`10:00, 10:30, 11:00`",
+            f"Дата: *{text}*\nСлоты через запятую: `10:00, 10:30`",
             parse_mode="Markdown")
         return
 
     if state.get("step") == "adm_times":
         times_raw = [t.strip() for t in text.split(",")]
-        valid = [t for t in times_raw if re.match(r'^([01]\d|2[0-3]):[0-5]\d$', t)]
+        valid = [t for t in times_raw
+                 if re.match(r'^([01]\d|2[0-3]):[0-5]\d$', t)]
         if not valid:
             await msg.answer("❌ Формат: `10:00, 10:30`", parse_mode="Markdown")
             return
@@ -947,7 +1197,7 @@ async def handle_text(msg: types.Message):
         slots[ds] = sorted(slots[ds])
         db_set("slots", slots)
         user_state.pop(uid, None)
-        await msg.answer(f"✅ Слоты на *{ds}*:\n{', '.join(valid)}",
+        await msg.answer(f"✅ Слоты на *{ds}*: {', '.join(valid)}",
                          parse_mode="Markdown", reply_markup=admin_menu())
         return
 
@@ -959,8 +1209,9 @@ async def handle_text(msg: types.Message):
         slots[text] = ALL_DAY_SLOTS.copy()
         db_set("slots", slots)
         user_state.pop(uid, None)
-        await msg.answer(f"✅ Весь день *{text}* открыт ({len(ALL_DAY_SLOTS)} слотов)",
-                         parse_mode="Markdown", reply_markup=admin_menu())
+        await msg.answer(
+            f"✅ День *{text}* полностью открыт ({len(ALL_DAY_SLOTS)} слотов)",
+            parse_mode="Markdown", reply_markup=admin_menu())
         return
 
     if state.get("step") == "adm_week_start":
@@ -969,8 +1220,7 @@ async def handle_text(msg: types.Message):
             return
         state["week_start"] = text
         state["step"] = "adm_week_end"
-        await msg.answer("Введи дату *конца* недели:\n`2026-05-28`",
-                         parse_mode="Markdown")
+        await msg.answer("Дата *конца* недели:", parse_mode="Markdown")
         return
 
     if state.get("step") == "adm_week_end":
@@ -980,8 +1230,8 @@ async def handle_text(msg: types.Message):
         start = datetime.strptime(state["week_start"], "%Y-%m-%d").date()
         end = datetime.strptime(text, "%Y-%m-%d").date()
         slots = db_get("slots", {})
-        count = 0
         cur = start
+        count = 0
         while cur <= end:
             ds = cur.strftime("%Y-%m-%d")
             slots[ds] = ALL_DAY_SLOTS.copy()
@@ -989,8 +1239,9 @@ async def handle_text(msg: types.Message):
             cur += timedelta(days=1)
         db_set("slots", slots)
         user_state.pop(uid, None)
-        await msg.answer(f"✅ Открыто *{count} дней* с {state['week_start']} по {text}",
-                         parse_mode="Markdown", reply_markup=admin_menu())
+        await msg.answer(
+            f"✅ Открыто *{count} дней* с {state['week_start']} по {text}",
+            parse_mode="Markdown", reply_markup=admin_menu())
         return
 
     if state.get("step") == "adm_close_day_date":
@@ -1012,8 +1263,7 @@ async def handle_text(msg: types.Message):
             return
         state["block_start"] = text
         state["step"] = "adm_block_end"
-        await msg.answer("Введи дату *конца* блокировки:\n`2026-05-28`",
-                         parse_mode="Markdown")
+        await msg.answer("Дата *конца* блокировки:", parse_mode="Markdown")
         return
 
     if state.get("step") == "adm_block_end":
@@ -1032,7 +1282,7 @@ async def handle_text(msg: types.Message):
         db_set("blocked_dates", blocked_dates)
         user_state.pop(uid, None)
         await msg.answer(
-            f"🚫 Даты с *{state['block_start']}* по *{text}* заблокированы.",
+            f"🚫 Заблокировано с *{state['block_start']}* по *{text}*",
             parse_mode="Markdown", reply_markup=admin_menu())
         return
 
@@ -1043,8 +1293,7 @@ async def handle_text(msg: types.Message):
             await msg.answer("❌ Введи числовой ID.")
             return
         appts = db_get("appointments", {})
-        found_rec = None
-        found_ds = None
+        found_rec = found_ds = None
         for ds, records in appts.items():
             for rec in records:
                 if rec["user_id"] == target_uid:
@@ -1060,9 +1309,8 @@ async def handle_text(msg: types.Message):
         state["move_old_time"] = found_rec["time"]
         state["step"] = "adm_move_new_date"
         await msg.answer(
-            f"Найдена запись: *{found_ds}* в *{found_rec['time']}*\n"
-            f"👤 {found_rec['name']}\n\n"
-            "Введи *новую дату*:",
+            f"Найдена: *{found_ds}* в *{found_rec['time']}*\n"
+            f"👤 {found_rec['name']}\n\nНовая дата:",
             parse_mode="Markdown")
         return
 
@@ -1072,8 +1320,7 @@ async def handle_text(msg: types.Message):
             return
         state["move_new_date"] = text
         state["step"] = "adm_move_new_time"
-        await msg.answer("Введи *новое время* (например `15:00`):",
-                         parse_mode="Markdown")
+        await msg.answer("Новое время (например `15:00`):", parse_mode="Markdown")
         return
 
     if state.get("step") == "adm_move_new_time":
@@ -1082,38 +1329,72 @@ async def handle_text(msg: types.Message):
             return
         appts = db_get("appointments", {})
         old_ds = state["move_old_date"]
-        old_time = state["move_old_time"]
         new_ds = state["move_new_date"]
-        new_time = text
         target_uid = state["move_uid"]
         moved = False
         for rec in appts.get(old_ds, []):
-            if rec["user_id"] == target_uid and rec["time"] == old_time:
+            if rec["user_id"] == target_uid and rec["time"] == state["move_old_time"]:
                 appts[old_ds].remove(rec)
-                rec["time"] = new_time
+                rec["time"] = text
                 rec["reminded_client"] = False
                 rec["reminded_admin"] = False
-                if new_ds not in appts:
-                    appts[new_ds] = []
+                if new_ds not in appts: appts[new_ds] = []
                 appts[new_ds].append(rec)
                 moved = True
                 try:
-                    await bot.send_message(
-                        target_uid,
-                        f"📅 Ваша консультация перенесена:\n"
-                        f"Новое время: *{new_ds}* в *{new_time}* МСК",
+                    await bot.send_message(target_uid,
+                        f"📅 Консультация перенесена:\n"
+                        f"*{new_ds}* в *{text}* МСК",
                         parse_mode="Markdown")
                 except:
                     pass
                 break
         if moved:
             db_set("appointments", appts)
-            await msg.answer(
-                f"✅ Запись перенесена на *{new_ds}* в *{new_time}*",
-                parse_mode="Markdown", reply_markup=admin_menu())
+            await msg.answer(f"✅ Перенесено на *{new_ds}* в *{text}*",
+                             parse_mode="Markdown", reply_markup=admin_menu())
         else:
-            await msg.answer("❌ Не удалось перенести.", reply_markup=admin_menu())
+            await msg.answer("❌ Не удалось.", reply_markup=admin_menu())
         user_state.pop(uid, None)
+        return
+
+    if state.get("step") == "adm_reg_username":
+        state["reg_username"] = text.lstrip("@")
+        state["step"] = "adm_reg_day"
+        days = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=d, callback_data=f"regday_{d}")]
+            for d in days
+        ])
+        await msg.answer("Выбери день недели:", reply_markup=kb)
+        return
+
+    if state.get("step") == "adm_reg_time":
+        if not re.match(r'^([01]\d|2[0-3]):[0-5]\d$', text):
+            await msg.answer("❌ Формат: `15:00`", parse_mode="Markdown")
+            return
+        clients = db_get("regular_clients", [])
+        clients.append({
+            "username": state["reg_username"],
+            "day": state["reg_day"],
+            "time": text
+        })
+        db_set("regular_clients", clients)
+        user_state.pop(uid, None)
+        await msg.answer(
+            f"✅ Добавлен постоянный клиент:\n"
+            f"@{state['reg_username']} — {state['reg_day']} в {text}",
+            reply_markup=admin_menu())
+        return
+
+    if state.get("step") == "adm_reg_del":
+        username = text.lstrip("@")
+        clients = db_get("regular_clients", [])
+        new_clients = [c for c in clients if c["username"].lower() != username.lower()]
+        db_set("regular_clients", new_clients)
+        user_state.pop(uid, None)
+        await msg.answer(f"✅ Клиент @{username} удалён.",
+                         reply_markup=admin_menu())
         return
 
     if state.get("step") == "adm_unblock":
@@ -1132,12 +1413,74 @@ async def handle_text(msg: types.Message):
         user_state.pop(uid, None)
         return
 
+    if state.get("step") == "adm_broadcast_text":
+        users = db_get("all_users", [])
+        sent = 0
+        for user_id in users:
+            try:
+                await bot.send_message(user_id, text)
+                sent += 1
+                await asyncio.sleep(0.05)
+            except:
+                pass
+        user_state.pop(uid, None)
+        await msg.answer(f"✅ Рассылка отправлена {sent} пользователям.",
+                         reply_markup=admin_menu())
+        return
+
+    if state.get("step") == "adm_excel_from":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-01`", parse_mode="Markdown")
+            return
+        state["excel_from"] = text
+        state["step"] = "adm_excel_to"
+        await msg.answer("Дата *конца* периода *ГГГГ-ММ-ДД*:",
+                         parse_mode="Markdown")
+        return
+
+    if state.get("step") == "adm_excel_to":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-31`", parse_mode="Markdown")
+            return
+        date_from = state["excel_from"]
+        date_to = text
+        user_state.pop(uid, None)
+        if not EXCEL_OK:
+            await msg.answer("❌ openpyxl не установлен. Добавь в requirements.txt")
+            return
+        buf = generate_excel(date_from, date_to)
+        if buf:
+            await msg.answer_document(
+                types.BufferedInputFile(
+                    buf.read(),
+                    filename=f"записи_{date_from}_{date_to}.xlsx"
+                ),
+                caption=f"📊 Записи с {date_from} по {date_to}"
+            )
+        else:
+            await msg.answer("Записей за этот период нет.")
+        return
+
     log_action(uid, msg.from_user.username, f"msg:{text[:30]}")
     await msg.answer("Выбери действие:", reply_markup=main_menu())
 
+@dp.callback_query(F.data.startswith("regday_"))
+async def regday_selected(cb: types.CallbackQuery):
+    day = cb.data[7:]
+    uid = cb.from_user.id
+    state = user_state.get(uid, {})
+    state["reg_day"] = day
+    state["step"] = "adm_reg_time"
+    user_state[uid] = state
+    await cb.message.answer(f"День: *{day}*\nВведи время (например `15:00`):",
+                             parse_mode="Markdown")
+
 # ========== ЗАПУСК ==========
 async def main():
-    print("✅ Бот Касикова v3.0 запущен")
+    log.info("=" * 50)
+    log.info("БОТ КАСИКОВА v4.0 ЗАПУЩЕН")
+    log.info("Команды: /admin — панель, /stop — остановить")
+    log.info("=" * 50)
     asyncio.create_task(reminder_loop())
     await dp.start_polling(bot)
 
