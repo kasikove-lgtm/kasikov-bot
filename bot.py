@@ -18,7 +18,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 TOKEN = os.environ.get("BOT_TOKEN", "")
 CHANNEL = os.environ.get("CHANNEL", "@kasikov_psy")
 ADMIN_PASSWORD_HASH = hashlib.sha256(
-    os.environ.get("ADMIN_PASSWORD", "Kasikov2026!").encode()
+    os.environ.get("ADMIN_PASSWORD").encode()
 ).hexdigest()
 LEADMAGNET_URL = "https://t.me/kasikov_psy/230"
 
