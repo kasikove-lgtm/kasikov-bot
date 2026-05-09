@@ -1,6 +1,6 @@
 """
 Бот Евгения Касикова — психологические консультации
-Хостинг: bothost.ru
+Версия 3.0 — финальная
 """
 
 import asyncio
@@ -17,10 +17,17 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # ========== КОНФИГУРАЦИЯ ==========
 TOKEN = os.environ.get("BOT_TOKEN", "")
 CHANNEL = os.environ.get("CHANNEL", "@kasikov_psy")
-ADMIN_PASSWORD_HASH = hashlib.sha256(
-    os.environ.get("ADMIN_PASSWORD").encode()
-).hexdigest()
 LEADMAGNET_URL = "https://t.me/kasikov_psy/230"
+ADMIN_USERNAMES = ["Iozteam", "kasikovevgenii"]
+
+PLATFORM_LINKS = {
+    "Zoom": "https://us04web.zoom.us/j/5806296223?pwd=Kk1taS7afUkbbdxQXnXk2FCc7Sglz4.1",
+    "ВКонтакте": "https://vk.ru/call/join/WcLhNuB_1k2NNkqmVirjcn932fkIUIgkQMQomB0kDtA",
+    "Яндекс Телемост": "https://telemost.yandex.ru/j/41045386326619",
+    "Google Meet": "https://meet.google.com/xea-ubvn-sdg",
+    "Microsoft Teams": "https://teams.live.com/meet/93982412886719?p=qS9poHinQUXXWNrRIp",
+    "MAX": "https://max.ru/joincall/ahmoeViSGUdzx948lSbeXgSXluuzdJW0h3HVmOepwtc",
+}
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -61,7 +68,8 @@ def db_set(key, value):
 def init_db():
     for key, val in [
         ("slots", {}), ("appointments", {}),
-        ("admin_chats", []), ("blocked_users", []), ("logs", []),
+        ("admin_chats", []), ("blocked_users", []),
+        ("logs", []), ("blocked_dates", []),
     ]:
         if db_get(key) is None:
             db_set(key, val)
@@ -92,6 +100,11 @@ def is_flood(uid):
 def is_blocked(uid):
     return uid in db_get("blocked_users", [])
 
+def is_admin(username):
+    if not username:
+        return False
+    return username.lower() in [u.lower() for u in ADMIN_USERNAMES]
+
 def log_action(uid, username, action):
     logs = db_get("logs", [])
     logs.append({
@@ -119,6 +132,18 @@ async def notify_admins(text, reply_markup=None):
         except:
             pass
 
+# ========== ГЕНЕРАЦИЯ СЛОТОВ ==========
+def generate_day_slots():
+    slots = []
+    cur = datetime.strptime("10:00", "%H:%M")
+    end = datetime.strptime("21:00", "%H:%M")
+    while cur <= end:
+        slots.append(cur.strftime("%H:%M"))
+        cur += timedelta(minutes=30)
+    return slots
+
+ALL_DAY_SLOTS = generate_day_slots()
+
 # ========== ТЕКСТЫ ==========
 TEXT_ABOUT = """👤 *Обо мне*
 
@@ -126,9 +151,15 @@ TEXT_ABOUT = """👤 *Обо мне*
 
 Я не классический психолог в пиджаке с дипломом на стене. Я человек, который сам прошёл через то, с чем сейчас, скорее всего, пришёл ты.
 
-Двое детей и развод после 15 лет брака. Расставание после пяти лет отношений. Полный финансовый крах. И каждый раз казалось, что мир просто взял и перевернулся.
+Двое детей и развод после 15 лет брака. Расставание после пяти лет отношений. Полный финансовый крах. И каждый раз казалось, что мир просто взял и перевернулся. То ощущение утром, когда просыпаешься, смотришь в потолок и думаешь: кто я теперь? Что вообще осталось?
 
 Я знаю это изнутри. Не по книжкам.
+
+Я из тех, кто привык добиваться результата. Кандидат в мастера спорта по плаванию, семь лет музыкальной школы. Потом 15 лет в найме в продажах: от рядового менеджера до директора по региону. Шесть собственных бизнесов. Флиппинг недвижимости — 10+ лет в рынке, 175+ объектов.
+
+А потом всё рухнуло разом. Бизнес, отношения, темп. Деньги, статус, ориентиры. Я упал и разбился в дребезги.
+
+И я не стал делать вид, что всё нормально. Пересобрал себя. Медленно, честно, без имитации бодрости.
 
 Сегодня я работаю с людьми в период расставания и развода. За плечами более 10 лет практики и более 200 часов личной и групповой терапии. Более 200 реальных историй в работе с отношениями.
 
@@ -136,27 +167,56 @@ TEXT_ABOUT = """👤 *Обо мне*
 
 👉 @kasikovevgenii"""
 
-TEXT_HOW = """⚙️ *Как я работаю*
+TEXT_HOW_1 = """⚙️ *Как я работаю*
 
 Сразу скажу честно — чтобы ты понял, подходим ли мы друг другу.
 
-Я не даю советов как жить. Не говорю «сделай вот так». Я помогаю тебе увидеть то, что ты сам не видишь.
+Я не даю советов как жить. Не говорю «сделай вот так». Если ты ищешь именно это — я не тот специалист.
 
-Я работаю *интегративно* — выбираю метод под конкретного человека:
+Я помогаю тебе увидеть то, что ты сам не видишь. Твои паттерны, автоматические реакции, то как ты строишь отношения. Задаю вопросы — иногда неудобные. Не осуждаю — но и не сюсюкаю.
 
-• *НЛП* — хаос в голове в первые недели
-• *Транзактный анализ* — почему снова похожая ситуация
-• *Психология привязанности* — почему так больно
-• *EMDR* — травма от измены, предательства, внезапного ухода
-• *Работа с телом* — боль которая живёт не только в голове
-• *Гештальт* — незавершённые разговоры
-• *IFS* — когда воюешь с собой
-• *Схема-терапия* — «я недостаточно хорош»
-• *Юнгианский подход* — когда не можешь отпустить
-• *Экзистенциальный подход* — кризис идентичности после развода
-• *Мужская психология* — мужчины горюют иначе
+Решения всегда остаются за тобой. Работа идёт в живых сессиях — не в переписке. Завершить можно в любой момент.
 
-Решения всегда остаются за тобой. Работа — в живых сессиях, не в переписке."""
+Я работаю *интегративно* — выбираю конкретный метод под конкретного человека, под его состояние и этап. Не смешиваю всё подряд — а выбираю то, что работает именно здесь и сейчас."""
+
+TEXT_HOW_2 = """*НЛП*
+Первые недели после расставания — хаос в голове. Одна и та же картинка прокручивается по кругу. НЛП работает с тем, как ты воспринимаешь произошедшее — меняет не событие, а то, как оно живёт внутри.
+
+*Транзактный анализ (Эрик Бёрн)*
+Почему снова похожая ситуация, похожая женщина, похожий финал. Смотрим из какого эго-состояния ты живёшь в отношениях — из Родителя, Ребёнка или Взрослого.
+
+*Психология привязанности*
+Почему расставание бьёт так сильно — это не слабость. Это твой тип привязанности, сформированный очень давно. Когда понимаешь свой паттерн — перестаёшь себя винить.
+
+*EMDR*
+Измена, предательство, внезапный уход — это травма. EMDR работает с тем, что застряло и не переваривается — воспоминания которые возвращаются снова и снова.
+
+*Работа с телом*
+Боль после расставания живёт не только в голове. Сжатие в груди, тяжесть, невозможность дышать полно. Работа с телесными реакциями помогает добраться до того, что словами не выражается.
+
+*Гештальт*
+Незавершённые разговоры, невысказанное, то что так и осталось внутри. Гештальт работает в настоящем моменте — завершает прошлое."""
+
+TEXT_HOW_3 = """*IFS — работа с частями личности*
+Одна часть хочет вернуться — другая знает что нельзя. Одна злится — другая скучает. Работа с частями помогает перестать воевать с собой и начать слышать что каждая из них на самом деле хочет.
+
+*Схема-терапия*
+Глубокие убеждения — «я недостаточно хорош», «меня всё равно бросят», «доверять нельзя». Они сформировались рано и тянут в одни и те же ситуации.
+
+*Юнгианский подход*
+Когда не можешь отпустить — часто дело не в том человеке, а в том что ты видел в нём. Возвращаем это золото себе. Тогда отпускание происходит само.
+
+*Психодинамический подход*
+Почему ты выбираешь именно таких людей, почему реагируешь именно так — работаем с бессознательными паттернами.
+
+*Травма-информированный подход*
+Работаю аккуратно — не ломлюсь в то, к чему ты ещё не готов.
+
+*Экзистенциальный подход*
+После развода многие теряют не только партнёра — они теряют себя. Кризис идентичности — это нормально. Находим новую опору внутри.
+
+*Мужская психология*
+Мужчины горюют иначе, восстанавливаются иначе, просят о помощи иначе. Я это учитываю — и не работаю с тобой как с универсальным клиентом."""
 
 TEXT_PRICE = """💼 *Условия платных консультаций*
 
@@ -167,11 +227,11 @@ TEXT_PRICE = """💼 *Условия платных консультаций*
 5 консультаций (5 часов) — 20 000 руб.
 _экономия 5 000 руб._
 
-Работаю по видео — Zoom, ВКонтакте, Яндекс Телемост, Google Meet.
+Работаю по видео — Zoom, ВКонтакте, Яндекс Телемост, Google Meet, Teams, MAX.
 
-После первой бесплатной встречи ты сам решаешь — продолжать или нет.
+После первой бесплатной встречи ты сам решаешь — продолжать или нет. Никакого давления.
 
-Записаться: @kasikovevgenii"""
+Для записи и вопросов: @kasikovevgenii"""
 
 TEXT_FREE_1 = """Здравствуйте. Спасибо, что написали — решиться на первый шаг бывает непросто.
 
@@ -179,7 +239,7 @@ TEXT_FREE_1 = """Здравствуйте. Спасибо, что написал
 
 После встречи вы получите письменный разбор с конкретными темами и рекомендациями. Он останется с вами независимо от того, решите ли вы продолжать работу со мной."""
 
-TEXT_FREE_2 = """Работаю по видео — ВКонтакте, Zoom, Яндекс Телемост, Google Meet.
+TEXT_FREE_2 = """Работаю по видео — ВКонтакте, Zoom, Яндекс Телемост, Google Meet, Teams, MAX.
 
 Для комфортной встречи выберите тихое место, где вас не будут отвлекать.
 
@@ -195,8 +255,7 @@ def main_menu():
                               callback_data="paid_consult")],
         [InlineKeyboardButton(text="📄 Гайд «4 шага после расставания»",
                               callback_data="get_guide")],
-        [InlineKeyboardButton(text="👤 Обо мне",
-                              callback_data="about")],
+        [InlineKeyboardButton(text="👤 Обо мне", callback_data="about")],
         [InlineKeyboardButton(text="📢 Подписаться на канал",
                               url=f"https://t.me/{CHANNEL.lstrip('@')}")],
     ])
@@ -220,14 +279,29 @@ def paid_menu():
         [InlineKeyboardButton(text="↩️ Назад", callback_data="back_main")],
     ])
 
+def platform_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎥 Zoom", callback_data="platform_Zoom")],
+        [InlineKeyboardButton(text="📱 ВКонтакте", callback_data="platform_ВКонтакте")],
+        [InlineKeyboardButton(text="💻 Яндекс Телемост", callback_data="platform_Яндекс Телемост")],
+        [InlineKeyboardButton(text="📹 Google Meet", callback_data="platform_Google Meet")],
+        [InlineKeyboardButton(text="🖥 Microsoft Teams", callback_data="platform_Microsoft Teams")],
+        [InlineKeyboardButton(text="📲 MAX", callback_data="platform_MAX")],
+    ])
+
 def admin_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Добавить слоты", callback_data="adm_add")],
-        [InlineKeyboardButton(text="🗑 Удалить слоты на дату", callback_data="adm_del")],
+        [InlineKeyboardButton(text="📅 Открыть весь день", callback_data="adm_open_day")],
+        [InlineKeyboardButton(text="🗓 Открыть неделю", callback_data="adm_open_week")],
+        [InlineKeyboardButton(text="❌ Закрыть день", callback_data="adm_close_day")],
+        [InlineKeyboardButton(text="🚫 Заблокировать диапазон дат", callback_data="adm_block_range")],
+        [InlineKeyboardButton(text="🔄 Перенести запись", callback_data="adm_move")],
         [InlineKeyboardButton(text="📋 Все записи", callback_data="adm_list")],
         [InlineKeyboardButton(text="📅 Мои слоты", callback_data="adm_slots")],
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats")],
         [InlineKeyboardButton(text="🚫 Заблокированные", callback_data="adm_blocked")],
-        [InlineKeyboardButton(text="📊 Последние логи", callback_data="adm_logs")],
+        [InlineKeyboardButton(text="📊 Логи", callback_data="adm_logs")],
     ])
 
 # ========== КАЛЕНДАРЬ ==========
@@ -238,6 +312,7 @@ def user_calendar(year, month):
     cal = calendar.monthcalendar(year, month)
     slots = db_get("slots", {})
     appts = db_get("appointments", {})
+    blocked_dates = db_get("blocked_dates", [])
     keyboard = []
     keyboard.append([InlineKeyboardButton(
         text=f"📅 {month_names[month-1]} {year}", callback_data="ignore")])
@@ -251,7 +326,7 @@ def user_calendar(year, month):
             else:
                 d = date(year, month, day)
                 ds = d.strftime("%Y-%m-%d")
-                if d < today:
+                if d < today or ds in blocked_dates:
                     row.append(InlineKeyboardButton(text="·", callback_data="ignore"))
                 else:
                     free = [t for t in slots.get(ds, [])
@@ -284,7 +359,7 @@ def slots_menu(date_str):
     taken = [r["time"] for r in appts.get(date_str, [])]
     keyboard = []
     row = []
-    for i, t in enumerate(day_slots):
+    for t in day_slots:
         is_taken = t in taken
         emoji = "🔴" if is_taken else "🟢"
         cb = "slot_taken" if is_taken else f"slot_{date_str}_{t}"
@@ -298,6 +373,55 @@ def slots_menu(date_str):
                                           callback_data="back_main")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+# ========== НАПОМИНАНИЯ ==========
+async def reminder_loop():
+    while True:
+        await asyncio.sleep(60)
+        try:
+            now = datetime.now()
+            appts = db_get("appointments", {})
+            for ds, records in appts.items():
+                for rec in records:
+                    try:
+                        appt_dt = datetime.strptime(f"{ds} {rec['time']}", "%Y-%m-%d %H:%M")
+                    except:
+                        continue
+                    diff = (appt_dt - now).total_seconds() / 60
+
+                    # Клиенту за 60 минут
+                    if 59 <= diff <= 61 and not rec.get("reminded_client"):
+                        platform = rec.get("platform", "")
+                        link = PLATFORM_LINKS.get(platform, "")
+                        try:
+                            await bot.send_message(
+                                rec["user_id"],
+                                f"⏰ Напоминание!\n\n"
+                                f"Через час наша встреча — {rec['time']} МСК\n"
+                                f"Платформа: {platform}\n"
+                                f"{'Ссылка: ' + link if link else ''}\n\n"
+                                f"Если что-то изменилось — напишите: @kasikovevgenii"
+                            )
+                            rec["reminded_client"] = True
+                        except:
+                            pass
+
+                    # Евгению за 60 минут
+                    if 59 <= diff <= 61 and not rec.get("reminded_admin"):
+                        type_label = "💼 Платная" if rec.get("type") == "paid" else "🆓 Бесплатная"
+                        await notify_admins(
+                            f"⏰ *Через час консультация!*\n\n"
+                            f"📅 {ds} в {rec['time']} МСК\n"
+                            f"{type_label}\n"
+                            f"👤 {rec['name']}\n"
+                            f"📱 {rec.get('platform', '—')}\n"
+                            f"🆔 @{rec.get('username', '—')}"
+                        )
+                        rec["reminded_admin"] = True
+
+            db_set("appointments", appts)
+        except:
+            pass
+
 # ========== ХЭНДЛЕРЫ ==========
 
 @dp.message(Command("start"))
@@ -305,6 +429,12 @@ async def start(msg: types.Message):
     if is_blocked(msg.from_user.id): return
     if is_flood(msg.from_user.id): return
     log_action(msg.from_user.id, msg.from_user.username, "/start")
+    # Регистрируем админов автоматически
+    if is_admin(msg.from_user.username):
+        chats = db_get("admin_chats", [])
+        if msg.from_user.id not in chats:
+            chats.append(msg.from_user.id)
+            db_set("admin_chats", chats)
     await msg.answer(
         f"Привет, {msg.from_user.first_name} 👋\n\n"
         "Я помогаю людям пройти через расставание — без застревания "
@@ -326,7 +456,11 @@ async def about_me(cb: types.CallbackQuery):
 @dp.callback_query(F.data == "how_i_work")
 async def how_i_work(cb: types.CallbackQuery):
     await cb.answer()
-    await cb.message.answer(TEXT_HOW, parse_mode="Markdown",
+    await cb.message.answer(TEXT_HOW_1, parse_mode="Markdown")
+    await asyncio.sleep(0.5)
+    await cb.message.answer(TEXT_HOW_2, parse_mode="Markdown")
+    await asyncio.sleep(0.5)
+    await cb.message.answer(TEXT_HOW_3, parse_mode="Markdown",
                              reply_markup=back_main_kb())
 
 @dp.callback_query(F.data == "back_main")
@@ -394,10 +528,8 @@ async def free_consult(cb: types.CallbackQuery):
     log_action(uid, cb.from_user.username, "free_consult")
     await cb.message.answer(TEXT_FREE_1)
     await asyncio.sleep(1)
-    await cb.message.answer(
-        TEXT_FREE_2,
-        reply_markup=user_calendar(date.today().year, date.today().month)
-    )
+    await cb.message.answer(TEXT_FREE_2,
+        reply_markup=user_calendar(date.today().year, date.today().month))
 
 @dp.callback_query(F.data == "no_slots")
 async def no_slots(cb: types.CallbackQuery):
@@ -414,8 +546,7 @@ async def day_selected(cb: types.CallbackQuery):
     await cb.message.delete()
     await cb.message.answer(
         f"📅 *{date_str}*\n\nВыбери время:\n🟢 свободно  🔴 занято",
-        parse_mode="Markdown", reply_markup=slots_menu(date_str)
-    )
+        parse_mode="Markdown", reply_markup=slots_menu(date_str))
 
 @dp.callback_query(F.data.startswith("cal_"))
 async def cal_nav(cb: types.CallbackQuery):
@@ -454,9 +585,36 @@ async def slot_selected(cb: types.CallbackQuery):
         f"✅ *{date_str}* в *{time_str}* МСК ({type_label})\n\n"
         "Напиши своё *имя* и кратко — *что сейчас происходит*.\n"
         "Чем больше контекста — тем лучше подготовлюсь к встрече:",
-        parse_mode="Markdown"
-    )
+        parse_mode="Markdown")
 
+# ========== ВЫБОР ПЛАТФОРМЫ ==========
+@dp.callback_query(F.data.startswith("platform_"))
+async def platform_selected(cb: types.CallbackQuery):
+    platform = cb.data[9:]
+    uid = cb.from_user.id
+    state = user_state.get(uid, {})
+    state["platform"] = platform
+    state["step"] = "confirm"
+    user_state[uid] = state
+    date_str = state["date"]
+    time_str = state["time"]
+    consult_type = state.get("type", "free")
+    type_label = "💼 Платная" if consult_type == "paid" else "🆓 Бесплатная"
+    confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Подтвердить запись",
+                              callback_data=f"confirm_{date_str}_{time_str}")],
+        [InlineKeyboardButton(text="↩️ Начать заново",
+                              callback_data="back_main")],
+    ])
+    await cb.message.answer(
+        f"📋 *Проверь данные:*\n\n"
+        f"📅 {date_str} в {time_str} МСК\n"
+        f"{type_label}\n"
+        f"👤 _{state.get('name', '—')}_\n"
+        f"📱 {platform}\n\nВсё верно?",
+        parse_mode="Markdown", reply_markup=confirm_kb)
+
+# ========== ПОДТВЕРЖДЕНИЕ ЗАПИСИ ==========
 @dp.callback_query(F.data.startswith("confirm_"))
 async def confirm_booking(cb: types.CallbackQuery):
     uid = cb.from_user.id
@@ -468,22 +626,26 @@ async def confirm_booking(cb: types.CallbackQuery):
     time_str = state["time"]
     name = state.get("name", "—")
     consult_type = state.get("type", "free")
+    platform = state.get("platform", "—")
     appts = db_get("appointments", {})
     if date_str not in appts:
         appts[date_str] = []
     appts[date_str].append({
         "user_id": uid, "name": name, "time": time_str,
         "username": cb.from_user.username or "нет",
-        "type": consult_type
+        "type": consult_type, "platform": platform,
+        "reminded_client": False, "reminded_admin": False
     })
     db_set("appointments", appts)
     user_state.pop(uid, None)
     await cb.message.delete()
     type_label = "💼 Платная" if consult_type == "paid" else "🆓 Бесплатная"
     await cb.message.answer(
-        f"✅ Запись принята!\n\n📅 {date_str} в {time_str} МСК\n"
-        f"{type_label} консультация\n\n"
-        "Напишите мне для подтверждения:\n👉 @kasikovevgenii"
+        f"✅ Запись принята!\n\n"
+        f"📅 {date_str} в {time_str} МСК\n"
+        f"{type_label} | {platform}\n\n"
+        "Евгений свяжется для подтверждения:\n"
+        "👉 @kasikovevgenii"
     )
     confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подтвердить",
@@ -492,31 +654,54 @@ async def confirm_booking(cb: types.CallbackQuery):
                               callback_data=f"adm_cancel_{uid}_{date_str}_{time_str}")],
     ])
     await notify_admins(
-        f"🔔 *Новая запись!*\n📅 {date_str} в {time_str} МСК\n"
-        f"{type_label}\n👤 {name}\n"
+        f"🔔 *Новая запись!*\n"
+        f"📅 {date_str} в {time_str} МСК\n"
+        f"{type_label}\n"
+        f"👤 {name}\n"
+        f"📱 {platform}\n"
         f"🆔 @{cb.from_user.username or 'нет'} | ID: {uid}",
         reply_markup=confirm_kb
     )
 
 @dp.callback_query(F.data.startswith("adm_ok_"))
 async def adm_ok(cb: types.CallbackQuery):
-    uid = int(cb.data.split("_")[2])
+    parts = cb.data.split("_")
+    uid = int(parts[2])
+    date_str = parts[3]
+    time_str = parts[4]
+    # Находим запись и отправляем ссылку
+    appts = db_get("appointments", {})
+    platform = "—"
+    for rec in appts.get(date_str, []):
+        if rec["user_id"] == uid and rec["time"] == time_str:
+            platform = rec.get("platform", "—")
+            break
+    link = PLATFORM_LINKS.get(platform, "")
     try:
-        await bot.send_message(uid,
-            "✅ Ваша запись подтверждена!\n"
-            "Если понадобится перенос — напишите: @kasikovevgenii")
-    except: pass
+        await bot.send_message(
+            uid,
+            f"✅ Ваша запись подтверждена!\n\n"
+            f"📅 {date_str} в {time_str} МСК\n"
+            f"📱 Платформа: {platform}\n"
+            f"{'🔗 Ссылка: ' + link if link else ''}\n\n"
+            f"Если понадобится перенос — напишите: @kasikovevgenii"
+        )
+    except:
+        pass
     await cb.message.edit_text(
-        cb.message.text + "\n\n✅ *Подтверждено*", parse_mode="Markdown")
+        cb.message.text + "\n\n✅ *Подтверждено — ссылка отправлена*",
+        parse_mode="Markdown")
 
 @dp.callback_query(F.data.startswith("adm_cancel_"))
 async def adm_cancel(cb: types.CallbackQuery):
-    uid = int(cb.data.split("_")[2])
+    parts = cb.data.split("_")
+    uid = int(parts[2])
     try:
         await bot.send_message(uid,
             "❌ К сожалению, это время не получится.\n"
             "Выберите другое время или напишите: @kasikovevgenii")
-    except: pass
+    except:
+        pass
     await cb.message.edit_text(
         cb.message.text + "\n\n❌ *Отменено*", parse_mode="Markdown")
 
@@ -535,21 +720,57 @@ async def skip_user_cb(cb: types.CallbackQuery):
     await cb.message.edit_text(
         cb.message.text + "\n\n✅ *Оставлено*", parse_mode="Markdown")
 
+# ========== АДМИН КОЛБЭКИ ==========
 @dp.callback_query(F.data == "adm_add")
 async def adm_add(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
     user_state[cb.from_user.id] = {"step": "adm_date"}
     await cb.message.answer(
         "Введи дату *ГГГГ-ММ-ДД*\nПример: `2026-05-22`",
         parse_mode="Markdown")
 
-@dp.callback_query(F.data == "adm_del")
-async def adm_del(cb: types.CallbackQuery):
-    user_state[cb.from_user.id] = {"step": "adm_del_date"}
+@dp.callback_query(F.data == "adm_open_day")
+async def adm_open_day(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    user_state[cb.from_user.id] = {"step": "adm_open_day_date"}
     await cb.message.answer(
-        "Введи дату для удаления *ГГГГ-ММ-ДД*:", parse_mode="Markdown")
+        "Введи дату для открытия *всех слотов* (10:00-21:00):\n`2026-05-22`",
+        parse_mode="Markdown")
+
+@dp.callback_query(F.data == "adm_open_week")
+async def adm_open_week(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    user_state[cb.from_user.id] = {"step": "adm_week_start"}
+    await cb.message.answer(
+        "Введи дату *начала* недели:\n`2026-05-22`",
+        parse_mode="Markdown")
+
+@dp.callback_query(F.data == "adm_close_day")
+async def adm_close_day(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    user_state[cb.from_user.id] = {"step": "adm_close_day_date"}
+    await cb.message.answer(
+        "Введи дату для *закрытия* всех слотов:\n`2026-05-22`",
+        parse_mode="Markdown")
+
+@dp.callback_query(F.data == "adm_block_range")
+async def adm_block_range(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    user_state[cb.from_user.id] = {"step": "adm_block_start"}
+    await cb.message.answer(
+        "Введи дату *начала* блокировки (отпуск/выходные):\n`2026-05-22`",
+        parse_mode="Markdown")
+
+@dp.callback_query(F.data == "adm_move")
+async def adm_move(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    user_state[cb.from_user.id] = {"step": "adm_move_find"}
+    await cb.message.answer(
+        "Введи ID пользователя для переноса записи:")
 
 @dp.callback_query(F.data == "adm_list")
 async def adm_list(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
     appts = db_get("appointments", {})
     today = date.today()
     text = "📋 *Предстоящие записи:*\n\n"
@@ -557,17 +778,21 @@ async def adm_list(cb: types.CallbackQuery):
     for ds in sorted(appts.keys()):
         try:
             d = datetime.strptime(ds, "%Y-%m-%d").date()
-        except: continue
+        except:
+            continue
         if d < today: continue
         for r in appts[ds]:
             t = "💼" if r.get("type") == "paid" else "🆓"
-            text += f"{t} *{ds}* {r['time']}\n👤 {r['name']} @{r['username']}\n\n"
+            text += (f"{t} *{ds}* {r['time']}\n"
+                     f"👤 {r['name']} | @{r['username']}\n"
+                     f"📱 {r.get('platform','—')}\n\n")
             found = True
     if not found: text = "📭 Записей нет."
     await cb.message.answer(text, parse_mode="Markdown")
 
 @dp.callback_query(F.data == "adm_slots")
 async def adm_slots(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
     slots = db_get("slots", {})
     appts = db_get("appointments", {})
     today = date.today()
@@ -576,17 +801,51 @@ async def adm_slots(cb: types.CallbackQuery):
     for ds in sorted(slots.keys()):
         try:
             d = datetime.strptime(ds, "%Y-%m-%d").date()
-        except: continue
+        except:
+            continue
         if d < today: continue
         taken = [r["time"] for r in appts.get(ds, [])]
         lines = [f"  {'🔴' if t in taken else '🟢'} {t}" for t in slots[ds]]
         text += f"*{ds}*\n" + "\n".join(lines) + "\n\n"
         found = True
-    if not found: text = "Слотов нет. Добавь через «➕»."
+    if not found: text = "Слотов нет."
     await cb.message.answer(text, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "adm_stats")
+async def adm_stats(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    appts = db_get("appointments", {})
+    logs = db_get("logs", [])
+    now = datetime.now()
+    month = now.month
+    year = now.year
+    total = free_count = paid_count = 0
+    for ds, records in appts.items():
+        try:
+            d = datetime.strptime(ds, "%Y-%m-%d")
+        except:
+            continue
+        if d.month == month and d.year == year:
+            for r in records:
+                total += 1
+                if r.get("type") == "paid":
+                    paid_count += 1
+                else:
+                    free_count += 1
+    guides = sum(1 for l in logs if l.get("action") == "got_guide")
+    await cb.message.answer(
+        f"📊 *Статистика за {now.strftime('%B %Y')}:*\n\n"
+        f"📅 Всего записей: {total}\n"
+        f"🆓 Бесплатных: {free_count}\n"
+        f"💼 Платных: {paid_count}\n"
+        f"📄 Гайдов выдано: {guides}\n"
+        f"👥 Действий в логах: {len(logs)}",
+        parse_mode="Markdown"
+    )
 
 @dp.callback_query(F.data == "adm_blocked")
 async def adm_blocked(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
     blocked = db_get("blocked_users", [])
     if not blocked:
         await cb.message.answer("Заблокированных нет.")
@@ -601,10 +860,11 @@ async def adm_blocked(cb: types.CallbackQuery):
 @dp.callback_query(F.data == "adm_unblock_ask")
 async def adm_unblock_ask(cb: types.CallbackQuery):
     user_state[cb.from_user.id] = {"step": "adm_unblock"}
-    await cb.message.answer("Введи ID пользователя для разблокировки:")
+    await cb.message.answer("Введи ID для разблокировки:")
 
 @dp.callback_query(F.data == "adm_logs")
 async def adm_logs(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
     logs = db_get("logs", [])
     if not logs:
         await cb.message.answer("Логов нет.")
@@ -622,12 +882,15 @@ async def handle_text(msg: types.Message):
     if is_blocked(uid): return
     if is_flood(uid): return
 
-    # Проверка пароля админа
-    if hashlib.sha256(text.encode()).hexdigest() == ADMIN_PASSWORD_HASH:
+    # Автоматически регистрируем админа
+    if is_admin(msg.from_user.username):
         chats = db_get("admin_chats", [])
         if uid not in chats:
             chats.append(uid)
             db_set("admin_chats", chats)
+
+    # Команда /admin для админов
+    if text == "/admin" and is_admin(msg.from_user.username):
         await msg.answer("🔐 *Панель администратора*",
                          parse_mode="Markdown", reply_markup=admin_menu())
         return
@@ -645,8 +908,7 @@ async def handle_text(msg: types.Message):
             f"⚠️ *Нецензурная лексика*\n"
             f"👤 @{msg.from_user.username or 'нет'} (ID: {uid})\n"
             f"💬 {text[:200]}",
-            reply_markup=block_kb
-        )
+            reply_markup=block_kb)
         return
 
     state = user_state.get(uid, {})
@@ -654,23 +916,10 @@ async def handle_text(msg: types.Message):
     # Ждём имя и ситуацию
     if state.get("step") == "awaiting_info":
         state["name"] = text
-        state["step"] = "confirm"
-        date_str = state["date"]
-        time_str = state["time"]
-        consult_type = state.get("type", "free")
-        type_label = "💼 Платная" if consult_type == "paid" else "🆓 Бесплатная"
-        confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Подтвердить запись",
-                                  callback_data=f"confirm_{date_str}_{time_str}")],
-            [InlineKeyboardButton(text="↩️ Начать заново",
-                                  callback_data="back_main")],
-        ])
+        state["step"] = "platform"
         await msg.answer(
-            f"📋 *Проверь данные:*\n\n"
-            f"📅 {date_str} в {time_str} МСК\n"
-            f"{type_label}\n👤 _{text}_\n\nВсё верно?",
-            parse_mode="Markdown", reply_markup=confirm_kb
-        )
+            "Через какую платформу удобнее созвониться?",
+            reply_markup=platform_menu())
         return
 
     # Админ-шаги
@@ -702,7 +951,49 @@ async def handle_text(msg: types.Message):
                          parse_mode="Markdown", reply_markup=admin_menu())
         return
 
-    if state.get("step") == "adm_del_date":
+    if state.get("step") == "adm_open_day_date":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-22`", parse_mode="Markdown")
+            return
+        slots = db_get("slots", {})
+        slots[text] = ALL_DAY_SLOTS.copy()
+        db_set("slots", slots)
+        user_state.pop(uid, None)
+        await msg.answer(f"✅ Весь день *{text}* открыт ({len(ALL_DAY_SLOTS)} слотов)",
+                         parse_mode="Markdown", reply_markup=admin_menu())
+        return
+
+    if state.get("step") == "adm_week_start":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-22`", parse_mode="Markdown")
+            return
+        state["week_start"] = text
+        state["step"] = "adm_week_end"
+        await msg.answer("Введи дату *конца* недели:\n`2026-05-28`",
+                         parse_mode="Markdown")
+        return
+
+    if state.get("step") == "adm_week_end":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-28`", parse_mode="Markdown")
+            return
+        start = datetime.strptime(state["week_start"], "%Y-%m-%d").date()
+        end = datetime.strptime(text, "%Y-%m-%d").date()
+        slots = db_get("slots", {})
+        count = 0
+        cur = start
+        while cur <= end:
+            ds = cur.strftime("%Y-%m-%d")
+            slots[ds] = ALL_DAY_SLOTS.copy()
+            count += 1
+            cur += timedelta(days=1)
+        db_set("slots", slots)
+        user_state.pop(uid, None)
+        await msg.answer(f"✅ Открыто *{count} дней* с {state['week_start']} по {text}",
+                         parse_mode="Markdown", reply_markup=admin_menu())
+        return
+
+    if state.get("step") == "adm_close_day_date":
         if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
             await msg.answer("❌ Формат: `2026-05-22`", parse_mode="Markdown")
             return
@@ -710,11 +1001,118 @@ async def handle_text(msg: types.Message):
         if text in slots:
             del slots[text]
             db_set("slots", slots)
-            await msg.answer(f"✅ Слоты на *{text}* удалены.",
-                             parse_mode="Markdown", reply_markup=admin_menu())
+        user_state.pop(uid, None)
+        await msg.answer(f"✅ День *{text}* закрыт.",
+                         parse_mode="Markdown", reply_markup=admin_menu())
+        return
+
+    if state.get("step") == "adm_block_start":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-22`", parse_mode="Markdown")
+            return
+        state["block_start"] = text
+        state["step"] = "adm_block_end"
+        await msg.answer("Введи дату *конца* блокировки:\n`2026-05-28`",
+                         parse_mode="Markdown")
+        return
+
+    if state.get("step") == "adm_block_end":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-28`", parse_mode="Markdown")
+            return
+        start = datetime.strptime(state["block_start"], "%Y-%m-%d").date()
+        end = datetime.strptime(text, "%Y-%m-%d").date()
+        blocked_dates = db_get("blocked_dates", [])
+        cur = start
+        while cur <= end:
+            ds = cur.strftime("%Y-%m-%d")
+            if ds not in blocked_dates:
+                blocked_dates.append(ds)
+            cur += timedelta(days=1)
+        db_set("blocked_dates", blocked_dates)
+        user_state.pop(uid, None)
+        await msg.answer(
+            f"🚫 Даты с *{state['block_start']}* по *{text}* заблокированы.",
+            parse_mode="Markdown", reply_markup=admin_menu())
+        return
+
+    if state.get("step") == "adm_move_find":
+        try:
+            target_uid = int(text)
+        except:
+            await msg.answer("❌ Введи числовой ID.")
+            return
+        appts = db_get("appointments", {})
+        found_rec = None
+        found_ds = None
+        for ds, records in appts.items():
+            for rec in records:
+                if rec["user_id"] == target_uid:
+                    found_rec = rec
+                    found_ds = ds
+                    break
+        if not found_rec:
+            await msg.answer("Запись не найдена.", reply_markup=admin_menu())
+            user_state.pop(uid, None)
+            return
+        state["move_uid"] = target_uid
+        state["move_old_date"] = found_ds
+        state["move_old_time"] = found_rec["time"]
+        state["step"] = "adm_move_new_date"
+        await msg.answer(
+            f"Найдена запись: *{found_ds}* в *{found_rec['time']}*\n"
+            f"👤 {found_rec['name']}\n\n"
+            "Введи *новую дату*:",
+            parse_mode="Markdown")
+        return
+
+    if state.get("step") == "adm_move_new_date":
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+            await msg.answer("❌ Формат: `2026-05-22`", parse_mode="Markdown")
+            return
+        state["move_new_date"] = text
+        state["step"] = "adm_move_new_time"
+        await msg.answer("Введи *новое время* (например `15:00`):",
+                         parse_mode="Markdown")
+        return
+
+    if state.get("step") == "adm_move_new_time":
+        if not re.match(r'^([01]\d|2[0-3]):[0-5]\d$', text):
+            await msg.answer("❌ Формат: `15:00`", parse_mode="Markdown")
+            return
+        appts = db_get("appointments", {})
+        old_ds = state["move_old_date"]
+        old_time = state["move_old_time"]
+        new_ds = state["move_new_date"]
+        new_time = text
+        target_uid = state["move_uid"]
+        moved = False
+        for rec in appts.get(old_ds, []):
+            if rec["user_id"] == target_uid and rec["time"] == old_time:
+                appts[old_ds].remove(rec)
+                rec["time"] = new_time
+                rec["reminded_client"] = False
+                rec["reminded_admin"] = False
+                if new_ds not in appts:
+                    appts[new_ds] = []
+                appts[new_ds].append(rec)
+                moved = True
+                try:
+                    await bot.send_message(
+                        target_uid,
+                        f"📅 Ваша консультация перенесена:\n"
+                        f"Новое время: *{new_ds}* в *{new_time}* МСК",
+                        parse_mode="Markdown")
+                except:
+                    pass
+                break
+        if moved:
+            db_set("appointments", appts)
+            await msg.answer(
+                f"✅ Запись перенесена на *{new_ds}* в *{new_time}*",
+                parse_mode="Markdown", reply_markup=admin_menu())
         else:
-            await msg.answer(f"❌ Слотов на *{text}* нет.",
-                             parse_mode="Markdown", reply_markup=admin_menu())
+            await msg.answer("❌ Не удалось перенести.", reply_markup=admin_menu())
         user_state.pop(uid, None)
         return
 
@@ -739,7 +1137,8 @@ async def handle_text(msg: types.Message):
 
 # ========== ЗАПУСК ==========
 async def main():
-    print("✅ Бот Касикова запущен")
+    print("✅ Бот Касикова v3.0 запущен")
+    asyncio.create_task(reminder_loop())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
