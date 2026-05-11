@@ -385,8 +385,10 @@ def cal_user(year, month):
             else:
                 d  = date(year, month, day)
                 ds = d.strftime("%Y-%m-%d")
-                if d < today or ds in bd:
+                if d < today:
                     row.append(InlineKeyboardButton(text="·", callback_data="noop"))
+                elif ds in bd:
+                    row.append(InlineKeyboardButton(text="❌", callback_data="noop"))
                 elif free_slots(ds):
                     row.append(InlineKeyboardButton(text=f"✅{day}", callback_data=f"uday_{ds}"))
                 else:
@@ -399,7 +401,7 @@ def cal_user(year, month):
         nav.append(InlineKeyboardButton(text="◀️", callback_data=f"ucal_{py}_{pm}"))
     else:
         nav.append(InlineKeyboardButton(text=" ", callback_data="noop"))
-    nav.append(InlineKeyboardButton(text="❌", callback_data="close_cal"))
+    nav.append(InlineKeyboardButton(text=" ", callback_data="noop"))
     nav.append(InlineKeyboardButton(text="▶️", callback_data=f"ucal_{ny}_{nm}"))
     rows.append(nav)
     rows.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main")])
@@ -424,17 +426,19 @@ def cal_admin(year, month):
                 d  = date(year, month, day)
                 ds = d.strftime("%Y-%m-%d")
                 if d < today:
-                    row.append(InlineKeyboardButton(text=f"·{day}", callback_data=f"aday_{ds}"))
-                elif ds in bd:
-                    row.append(InlineKeyboardButton(text=f"❌{day}", callback_data=f"aday_{ds}"))
+                    row.append(InlineKeyboardButton(text="·", callback_data=f"aday_{ds}"))
                 else:
+                    # Сначала проверяем записи (приоритет выше блокировки)
                     day_a      = appts.get(ds, [])
                     has_unconf = any(not r.get("confirmed") for r in day_a)
                     has_conf   = any(r.get("confirmed") for r in day_a)
+                    is_blocked = ds in bd
                     if has_unconf:
                         row.append(InlineKeyboardButton(text=f"🟡{day}", callback_data=f"aday_{ds}"))
                     elif has_conf:
                         row.append(InlineKeyboardButton(text=f"🔵{day}", callback_data=f"aday_{ds}"))
+                    elif is_blocked:
+                        row.append(InlineKeyboardButton(text=f"❌{day}", callback_data=f"aday_{ds}"))
                     elif slots.get(ds):
                         row.append(InlineKeyboardButton(text=f"✅{day}", callback_data=f"aday_{ds}"))
                     else:
@@ -456,25 +460,39 @@ def cal_admin(year, month):
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_day_admin(ds):
-    slots = db_get("slots", {})
-    appts = db_get("appts", {})
-    today = date.today()
-    is_past   = datetime.strptime(ds, "%Y-%m-%d").date() < today
-    day_slots = slots.get(ds, [])
+    slots    = db_get("slots", {})
+    appts    = db_get("appts", {})
+    bd       = db_get("blocked_dates", [])
+    today    = date.today()
+    is_past  = datetime.strptime(ds, "%Y-%m-%d").date() < today
+    is_blocked_day = ds in bd
+    day_slots = slots.get(ds, []) if not is_blocked_day else ALL_SLOTS
     taken     = {r["time"]: r for r in appts.get(ds, [])}
     rows = []
     row  = []
     for t in day_slots:
         if t in taken:
             emoji = "🔵" if taken[t].get("confirmed") else "🟡"
+            cb_data = f"aslot_{ds}_{t}"
+        elif is_blocked_day:
+            emoji   = "🔴"
+            cb_data = f"aslot_blocked_{ds}_{t}"
         else:
-            emoji = "🟢"
-        row.append(InlineKeyboardButton(text=f"{emoji}{t}", callback_data=f"aslot_{ds}_{t}"))
+            emoji   = "🟢"
+            cb_data = f"aslot_{ds}_{t}"
+        row.append(InlineKeyboardButton(text=f"{emoji}{t}", callback_data=cb_data))
         if len(row) == 3: rows.append(row); row = []
     if row: rows.append(row)
     if is_past:
         rows.append([InlineKeyboardButton(text="➕ Добавить сессию",
                                           callback_data=f"adm_add_session_{ds}")])
+    elif is_blocked_day:
+        rows.append([
+            InlineKeyboardButton(text="✅ Открыть весь день",
+                                 callback_data=f"adm_unblock_day_{ds}"),
+            InlineKeyboardButton(text="✏️ Записать",
+                                 callback_data=f"adm_book_slot_{ds}"),
+        ])
     else:
         rows.append([
             InlineKeyboardButton(text="➕ Добавить слоты", callback_data=f"adm_add_slots_{ds}"),
@@ -731,8 +749,10 @@ async def close_cal(cb: types.CallbackQuery):
 async def about(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚙️ Как я работаю", callback_data="how_work")],
-        [InlineKeyboardButton(text="↩️ Назад",          callback_data="main")],
+        [InlineKeyboardButton(text="⚙️ Как я работаю",               callback_data="how_work")],
+        [InlineKeyboardButton(text="1️⃣ Записаться на бесплатную",     callback_data="free")],
+        [InlineKeyboardButton(text="💼 Записаться на платную",        callback_data="book_paid")],
+        [InlineKeyboardButton(text="↩️ Назад",                        callback_data="main")],
     ])
     await cb.message.answer(T_ABOUT, parse_mode="Markdown", reply_markup=kb)
  
@@ -743,12 +763,22 @@ async def how_work(cb: types.CallbackQuery):
     await asyncio.sleep(0.3)
     await cb.message.answer(T_HOW2, parse_mode="Markdown")
     await asyncio.sleep(0.3)
-    await cb.message.answer(T_HOW3, parse_mode="Markdown", reply_markup=kb_back())
+    cta_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="1️⃣ Записаться на бесплатную",  callback_data="free")],
+        [InlineKeyboardButton(text="💼 Записаться на платную",     callback_data="book_paid")],
+        [InlineKeyboardButton(text="↩️ Назад",                     callback_data="main")],
+    ])
+    await cb.message.answer(T_HOW3, parse_mode="Markdown", reply_markup=cta_kb)
  
 @dp.callback_query(F.data == "faq")
 async def faq(cb: types.CallbackQuery):
     await cb.answer()
-    await cb.message.answer(T_FAQ, parse_mode="Markdown", reply_markup=kb_back())
+    faq_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="1️⃣ Записаться на бесплатную",  callback_data="free")],
+        [InlineKeyboardButton(text="💼 Записаться на платную",     callback_data="book_paid")],
+        [InlineKeyboardButton(text="↩️ Назад",                     callback_data="main")],
+    ])
+    await cb.message.answer(T_FAQ, parse_mode="Markdown", reply_markup=faq_kb)
  
 @dp.callback_query(F.data == "paid_info")
 async def paid_info(cb: types.CallbackQuery):
@@ -1198,22 +1228,31 @@ async def aday_open(cb: types.CallbackQuery):
  
     if step == "adm_open_day_pick":
         slots = db_get("slots",{}); slots[ds] = ALL_SLOTS.copy(); db_set("slots",slots)
+        bd    = db_get("blocked_dates",[])
+        if ds in bd: bd.remove(ds); db_set("blocked_dates",bd)
         clr_st(uid); await cb.answer(f"✅ День {ds} открыт")
-        await cb.message.answer(f"✅ День *{ds}* открыт.", parse_mode="Markdown",
-                                 reply_markup=kb_admin())
+        await cb.message.answer(
+            f"✅ День *{ds}* открыт — {len(ALL_SLOTS)} слотов\n🟢 свободно",
+            parse_mode="Markdown", reply_markup=slots_day_admin(ds))
         return
  
     if step == "adm_week_pick":
         start = datetime.strptime(ds,"%Y-%m-%d").date()
         slots = db_get("slots",{})
+        bd    = db_get("blocked_dates",[])
         for i in range(7):
-            d2 = start + timedelta(days=i)
-            slots[d2.strftime("%Y-%m-%d")] = ALL_SLOTS.copy()
-        db_set("slots",slots); clr_st(uid)
+            d2  = start + timedelta(days=i)
+            ds2 = d2.strftime("%Y-%m-%d")
+            slots[ds2] = ALL_SLOTS.copy()
+            if ds2 in bd: bd.remove(ds2)
+        db_set("slots",slots); db_set("blocked_dates",bd); clr_st(uid)
         end_s = (start + timedelta(days=6)).strftime("%d.%m")
         await cb.answer("✅ Неделя открыта")
-        await cb.message.answer(f"✅ Неделя с *{ds}* по *{end_s}* открыта.",
-                                 parse_mode="Markdown", reply_markup=kb_admin())
+        today = date.today()
+        await cb.message.answer(
+            f"✅ Неделя с *{ds}* по *{end_s}* открыта.",
+            parse_mode="Markdown",
+            reply_markup=cal_admin(start.year, start.month))
         return
  
     if step == "adm_block_week_pick":
@@ -1246,7 +1285,8 @@ async def aday_open(cb: types.CallbackQuery):
             await cb.answer("❌ Неделя заблокирована")
             await cb.message.answer(
                 f"❌ Неделя с *{ds}* по *{end_s}* заблокирована.",
-                parse_mode="Markdown", reply_markup=kb_admin())
+                parse_mode="Markdown",
+                reply_markup=cal_admin(start.year, start.month))
         return
  
     if step == "adm_move_new_date":
@@ -1264,21 +1304,29 @@ async def aday_open(cb: types.CallbackQuery):
                                  parse_mode="Markdown", reply_markup=slots_day_admin(ds))
         return
  
-    today = date.today()
+    today   = date.today()
     is_past = datetime.strptime(ds,"%Y-%m-%d").date() < today
+    bd      = db_get("blocked_dates",[])
+ 
     if is_past:
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="➕ Добавить сессию",
-                                  callback_data=f"adm_add_session_{ds}")],
-            [InlineKeyboardButton(text="↩️ Назад", callback_data="adm_cal")],
-        ])
-        await cb.answer()
-        await cb.message.answer(f"📅 *{ds}* (прошедший день)", parse_mode="Markdown",
-                                 reply_markup=kb)
+        # Показываем слоты прошедшего дня + кнопку добавить сессию
+        await cb.message.delete()
+        await cb.message.answer(
+            f"📅 *{ds}* (прошедший день)\n🔵 запись  🟡 неподтверждённая",
+            parse_mode="Markdown", reply_markup=slots_day_admin(ds))
         return
  
-    slots = db_get("slots",{}); bd = db_get("blocked_dates",[])
-    if not slots.get(ds) and ds not in bd:
+    # Заблокированный день — показываем слоты как 🔴
+    if ds in bd:
+        await cb.message.delete()
+        await cb.message.answer(
+            f"📅 *{ds}* — день закрыт\n🔴 закрыто  🟡 неподтверждённая запись  🔵 запись",
+            parse_mode="Markdown", reply_markup=slots_day_admin(ds))
+        return
+ 
+    # Пустой день (нет слотов)
+    slots = db_get("slots",{})
+    if not slots.get(ds):
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Открыть день",
                                   callback_data=f"adm_do_open_{ds}")],
@@ -1301,25 +1349,75 @@ async def aday_open(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_do_open_"))
 async def adm_do_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[12:]
+    ds    = cb.data[12:]
     slots = db_get("slots",{}); slots[ds] = ALL_SLOTS.copy(); db_set("slots",slots)
+    bd    = db_get("blocked_dates",[])
+    if ds in bd: bd.remove(ds); db_set("blocked_dates",bd)
     await cb.answer(f"✅ День {ds} открыт")
     await cb.message.delete()
-    await cb.message.answer(f"✅ День *{ds}* открыт.", parse_mode="Markdown",
-                             reply_markup=kb_admin())
+    await cb.message.answer(
+        f"✅ День *{ds}* открыт — {len(ALL_SLOTS)} слотов\n🟢 свободно",
+        parse_mode="Markdown", reply_markup=slots_day_admin(ds))
  
 @dp.callback_query(F.data.startswith("adm_do_close_day_"))
 async def adm_do_close_day(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[17:]
-    bd = db_get("blocked_dates",[]); 
+    ds    = cb.data[17:]
+    bd    = db_get("blocked_dates",[])
     if ds not in bd: bd.append(ds); db_set("blocked_dates",bd)
     slots = db_get("slots",{})
     if ds in slots: del slots[ds]; db_set("slots",slots)
     await cb.answer(f"❌ День {ds} закрыт")
     await cb.message.delete()
-    await cb.message.answer(f"❌ День *{ds}* закрыт.", parse_mode="Markdown",
-                             reply_markup=kb_admin())
+    await cb.message.answer(
+        f"📅 *{ds}* — день закрыт\n🔴 все слоты заблокированы",
+        parse_mode="Markdown", reply_markup=slots_day_admin(ds))
+ 
+ 
+@dp.callback_query(F.data.startswith("aslot_blocked_"))
+async def aslot_blocked_open(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    parts = cb.data.split("_"); ds = parts[2]; tm = parts[3]
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🟢 Открыть слот",
+                              callback_data=f"adm_unblock_slot_{ds}_{tm}")],
+        [InlineKeyboardButton(text="✏️ Записать клиента",
+                              callback_data=f"adm_book_to_{ds}_{tm}")],
+        [InlineKeyboardButton(text="↩️ Назад", callback_data=f"aday_{ds}")],
+    ])
+    await cb.answer()
+    await cb.message.answer(f"🔴 Слот {ds} в {tm} — закрыт. Что сделать?",
+                             reply_markup=kb)
+ 
+@dp.callback_query(F.data.startswith("adm_unblock_slot_"))
+async def adm_unblock_slot(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
+    slots = db_get("slots",{})
+    bd    = db_get("blocked_dates",[])
+    if ds not in slots: slots[ds] = []
+    if tm not in slots[ds]:
+        slots[ds].append(tm); slots[ds] = sorted(slots[ds])
+    db_set("slots",slots)
+    await cb.answer(f"🟢 Слот {tm} открыт")
+    await cb.message.delete()
+    await cb.message.answer(
+        f"📅 *{ds}*\n🔴 закрыто  🟢 открыто",
+        parse_mode="Markdown", reply_markup=slots_day_admin(ds))
+ 
+@dp.callback_query(F.data.startswith("adm_unblock_day_"))
+async def adm_unblock_day(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    ds    = cb.data[16:]
+    bd    = db_get("blocked_dates",[])
+    slots = db_get("slots",{})
+    if ds in bd: bd.remove(ds); db_set("blocked_dates",bd)
+    slots[ds] = ALL_SLOTS.copy(); db_set("slots",slots)
+    await cb.answer(f"✅ День {ds} полностью открыт")
+    await cb.message.delete()
+    await cb.message.answer(
+        f"✅ День *{ds}* открыт — {len(ALL_SLOTS)} слотов\n🟢 свободно",
+        parse_mode="Markdown", reply_markup=slots_day_admin(ds))
  
 @dp.callback_query(F.data.startswith("aslot_"))
 async def aslot_open(cb: types.CallbackQuery):
@@ -1505,7 +1603,8 @@ async def adm_bw_yes(cb: types.CallbackQuery):
     end_s = (start+timedelta(days=6)).strftime("%d.%m")
     await cb.message.answer(
         f"❌ Неделя с *{ds}* по *{end_s}* заблокирована (записи сохранены).",
-        parse_mode="Markdown", reply_markup=kb_admin())
+        parse_mode="Markdown",
+        reply_markup=cal_admin(start.year, start.month))
  
 @dp.callback_query(F.data == "adm_book_reg")
 async def adm_book_reg(cb: types.CallbackQuery):
@@ -2017,12 +2116,9 @@ async def handle_text(msg: types.Message):
         for t in valid:
             if t not in slots[ds]: slots[ds].append(t)
         slots[ds] = sorted(slots[ds]); db_set("slots",slots); clr_st(uid)
-        await msg.answer(f"✅ Добавлено на *{ds}*: {', '.join(valid)}",
-                         parse_mode="Markdown",
-                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                             InlineKeyboardButton(text="↩️ Назад к дню",
-                                                  callback_data=f"aday_{ds}")
-                         ]]))
+        await msg.answer(
+            f"✅ Добавлено на *{ds}*: {', '.join(valid)}",
+            parse_mode="Markdown", reply_markup=slots_day_admin(ds))
         return
  
     # Постоянный клиент - добавить
