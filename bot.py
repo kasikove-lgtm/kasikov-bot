@@ -37,6 +37,58 @@ PLATFORMS = {
     "MAX":             "https://max.ru/joincall/ahmoeViSGUdzx948lSbeXgSXluuzdJW0h3HVmOepwtc",
 }
 DURATIONS = ["30 мин", "1 час", "1.5 часа", "2 часа", "2.5 часа", "3 часа"]
+ 
+PRICES = {
+    "30 мин":   2500,
+    "1 час":    5000,
+    "1.5 часа": 7500,
+    "2 часа":   10000,
+    "2.5 часа": 12500,
+    "3 часа":   15000,
+}
+ 
+PAYMENT_CARD_RU = """💳 *Оплата картой РФ / СБП*
+ 
+По номеру телефона СБП:
+`+7 965 763-48-79`
+Евгений Александрович К.
+ 
+Банки: Сбер, ВТБ, Альфа, Газпром, Озон
+ 
+После оплаты нажмите кнопку ниже 👇"""
+ 
+PAYMENT_CARD_INTL = """💳 *Оплата зарубежной картой*
+ 
+Номер карты:
+`4916 9903 1291 7674`
+Jamolov Nurmuxammad
+ 
+После оплаты нажмите кнопку ниже 👇"""
+ 
+PRICES = {
+    "30 мин":   2500,
+    "1 час":    5000,
+    "1.5 часа": 7500,
+    "2 часа":   10000,
+    "2.5 часа": 12500,
+    "3 часа":   15000,
+}
+ 
+RF_CARD = """💳 *Оплата картой РФ / СБП*
+ 
+Номер телефона (СБП): *+7 965 763-48-79*
+Получатель: Евгений Александрович К.
+Банки: Сбер, ВТБ, Альфа, Газпром, Озон
+ 
+После оплаты нажмите кнопку «✅ Оплатил»"""
+ 
+FOREIGN_CARD = """💳 *Оплата зарубежной картой*
+ 
+Номер карты: *4916 9903 1291 7674*
+Получатель: Jamolov Nurmuxammad
+ 
+После оплаты нажмите кнопку «✅ Оплатил»"""
+ 
 SOURCES   = [("📸 Instagram","ig"),("🎵 TikTok","tt"),
              ("▶️ YouTube","yt"),("💙 ВКонтакте","vk"),("🌐 Другой","other")]
  
@@ -56,7 +108,7 @@ def db_init():
         ("slots",{}),("appts",{}),("admin_chats",[]),("blocked",[]),
         ("logs",[]),("blocked_dates",[]),("users",[]),("violations",{}),
         ("regulars",[]),("states",{}),("drip",[]),("invited",[]),
-        ("reviews",[]),("pending_feedback",{}),
+        ("reviews",[]),("pending_feedback",{}),("closed_slots",{}),
     ]:
         if db_get(k) is None: db_set(k, v)
  
@@ -149,10 +201,12 @@ def day_slots_all():
 ALL_SLOTS = day_slots_all()
  
 def free_slots(ds):
-    slots = db_get("slots", {})
-    appts = db_get("appts", {})
-    taken = [r["time"] for r in appts.get(ds, [])]
-    return [t for t in slots.get(ds, []) if t not in taken]
+    slots        = db_get("slots", {})
+    closed_slots = db_get("closed_slots", {})
+    appts        = db_get("appts", {})
+    taken  = [r["time"] for r in appts.get(ds, [])]
+    closed = closed_slots.get(ds, [])
+    return [t for t in slots.get(ds, []) if t not in taken and t not in closed]
  
 def has_booking(uid, ds):
     return any(r["user_id"] == uid for r in db_get("appts", {}).get(ds, []))
@@ -460,21 +514,28 @@ def cal_admin(year, month):
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_day_admin(ds):
-    slots    = db_get("slots", {})
-    appts    = db_get("appts", {})
-    bd       = db_get("blocked_dates", [])
-    today    = date.today()
-    is_past  = datetime.strptime(ds, "%Y-%m-%d").date() < today
+    slots        = db_get("slots", {})
+    closed_slots = db_get("closed_slots", {})
+    appts        = db_get("appts", {})
+    bd           = db_get("blocked_dates", [])
+    today        = date.today()
+    is_past      = datetime.strptime(ds, "%Y-%m-%d").date() < today
     is_blocked_day = ds in bd
-    day_slots = slots.get(ds, []) if not is_blocked_day else ALL_SLOTS
-    taken     = {r["time"]: r for r in appts.get(ds, [])}
+    # Все слоты дня = открытые + закрытые + если день заблокирован — все
+    open_slots   = slots.get(ds, [])
+    closed_day   = closed_slots.get(ds, [])
+    if is_blocked_day:
+        all_day_slots = ALL_SLOTS
+    else:
+        all_day_slots = sorted(set(open_slots + closed_day))
+    taken = {r["time"]: r for r in appts.get(ds, [])}
     rows = []
     row  = []
-    for t in day_slots:
+    for t in all_day_slots:
         if t in taken:
-            emoji = "🔵" if taken[t].get("confirmed") else "🟡"
+            emoji   = "🔵" if taken[t].get("confirmed") else "🟡"
             cb_data = f"aslot_{ds}_{t}"
-        elif is_blocked_day:
+        elif t in closed_day or is_blocked_day:
             emoji   = "🔴"
             cb_data = f"aslot_blocked_{ds}_{t}"
         else:
@@ -502,12 +563,15 @@ def slots_day_admin(ds):
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_menu_user(ds):
-    slots = db_get("slots", {})
-    appts = db_get("appts", {})
-    taken = [r["time"] for r in appts.get(ds, [])]
-    rows  = []
-    row   = []
+    slots        = db_get("slots", {})
+    closed_slots = db_get("closed_slots", {})
+    appts        = db_get("appts", {})
+    taken  = [r["time"] for r in appts.get(ds, [])]
+    closed = closed_slots.get(ds, [])
+    rows   = []
+    row    = []
     for t in slots.get(ds, []):
+        if t in closed: continue  # закрытые не показываем клиенту
         if t in taken:
             row.append(InlineKeyboardButton(text=f"🔴{t}", callback_data="slot_taken"))
         else:
@@ -884,11 +948,34 @@ async def dur_sel(cb: types.CallbackQuery):
     dur = cb.data[4:]
     uid = cb.from_user.id
     st  = get_st(uid)
-    st["duration"] = dur; st["step"] = "desc"; set_st(uid, st)
+    st["duration"] = dur; set_st(uid, st)
+    await cb.answer()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="1️⃣ Первый раз",  callback_data="paid_first")],
+        [InlineKeyboardButton(text="🔄 Повтор",       callback_data="paid_repeat")],
+    ])
+    await cb.message.answer("Это первая сессия или повторная?", reply_markup=kb)
+ 
+@dp.callback_query(F.data == "paid_first")
+async def paid_first_cb(cb: types.CallbackQuery):
+    uid  = cb.from_user.id
+    st   = get_st(uid); st["step"] = "desc"; st["is_repeat"] = False; set_st(uid, st)
     name = cb.from_user.first_name or "Клиент"
+    await cb.answer()
     await cb.message.answer(
         f"{name}, чтобы сессия была для вас максимально полезной, "
         "по желанию опишите пожалуйста что сейчас у вас происходит:")
+ 
+@dp.callback_query(F.data == "paid_repeat")
+async def paid_repeat_cb(cb: types.CallbackQuery):
+    uid = cb.from_user.id
+    st  = get_st(uid); st["step"] = "platform"; st["is_repeat"] = True
+    st.setdefault("name", cb.from_user.first_name or "Клиент")
+    st.setdefault("desc", "Повторная сессия")
+    set_st(uid, st)
+    await cb.answer()
+    await cb.message.answer("Через какую платформу удобнее созвониться?",
+                             reply_markup=kb_platform())
  
 @dp.callback_query(F.data == "desc_extend")
 async def desc_extend(cb: types.CallbackQuery):
@@ -971,6 +1058,19 @@ async def confirm_book(cb: types.CallbackQuery):
         f"📅 {ds} в {tm} МСК\n{tl} | ⏱ {dur}\n📱 {plat}\n\n"
         "Евгений скоро подтвердит и пришлёт ссылку на видеочат.",
         reply_markup=ck)
+    # Для платной — сразу отправляем реквизиты
+    if ctype == "paid":
+        price = PRICES.get(dur, 5000)
+        pay_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Оплата картой РФ / СБП",
+                                  callback_data=f"pay_rf_{uid}_{ds}_{tm}")],
+            [InlineKeyboardButton(text="💳 Оплата зарубежной картой",
+                                  callback_data=f"pay_foreign_{uid}_{ds}_{tm}")],
+        ])
+        await cb.message.answer(
+            f"💰 Стоимость сессии {dur}: *{price:,} руб.*\n\n"
+            "Выберите удобный способ оплаты:",
+            parse_mode="Markdown", reply_markup=pay_kb)
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подтвердить",
                               callback_data=f"adm_ok_{uid}_{ds}_{tm}")],
@@ -983,6 +1083,20 @@ async def confirm_book(cb: types.CallbackQuery):
         f"🔔 *Новая запись!*\n📅 {ds} в {tm} МСК\n{tl} | ⏱ {dur}\n"
         f"👤 {name}\n📱 {plat}\n💬 {desc[:100]}\n🆔 @{uname} | ID: {uid}",
         kb=adm_kb)
+ 
+    # Реквизиты на оплату уходят сразу (только для платных)
+    if ctype == "paid":
+        price = PRICES.get(dur, 5000)
+        pay_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Оплата картой РФ / СБП",
+                                  callback_data=f"pay_ru_{uid}_{ds}_{tm}")],
+            [InlineKeyboardButton(text="💳 Оплата зарубежной картой",
+                                  callback_data=f"pay_intl_{uid}_{ds}_{tm}")],
+        ])
+        await bot.send_message(uid,
+            f"💰 *Стоимость сессии: {price:,} руб.*\n\n"
+            f"Выберите удобный способ оплаты:",
+            parse_mode="Markdown", reply_markup=pay_kb)
  
 @dp.callback_query(F.data == "my_appts")
 async def my_appts(cb: types.CallbackQuery):
@@ -1086,7 +1200,6 @@ async def adm_ok(cb: types.CallbackQuery):
     db_set("appts", appts)
     try:
         ck = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Записан",    callback_data=f"cli_ok_{ds}_{tm}")],
             [InlineKeyboardButton(text="🔄 Перенести",  callback_data=f"cli_move_{ds}_{tm}")],
             [InlineKeyboardButton(text="❌ Отменить",   callback_data=f"cli_cancel_{ds}_{tm}")],
             [InlineKeyboardButton(text="📅 Мои записи", callback_data="my_appts")],
@@ -1378,27 +1491,39 @@ async def adm_do_close_day(cb: types.CallbackQuery):
 async def aslot_blocked_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     parts = cb.data.split("_"); ds = parts[2]; tm = parts[3]
+    uid   = cb.from_user.id
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🟢 Открыть слот",
                               callback_data=f"adm_unblock_slot_{ds}_{tm}")],
         [InlineKeyboardButton(text="✏️ Записать клиента",
-                              callback_data=f"adm_book_to_{ds}_{tm}")],
+                              callback_data=f"adm_book_blocked_{ds}_{tm}")],
         [InlineKeyboardButton(text="↩️ Назад", callback_data=f"aday_{ds}")],
     ])
     await cb.answer()
     await cb.message.answer(f"🔴 Слот {ds} в {tm} — закрыт. Что сделать?",
                              reply_markup=kb)
  
+@dp.callback_query(F.data.startswith("adm_book_blocked_"))
+async def adm_book_blocked(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
+    uid   = cb.from_user.id
+    set_st(uid, {"step":"adm_manual_tg","book_ds":ds,"book_tm":tm})
+    await cb.answer()
+    await cb.message.answer("Введите username клиента в Telegram (без @):")
+ 
 @dp.callback_query(F.data.startswith("adm_unblock_slot_"))
 async def adm_unblock_slot(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
-    slots = db_get("slots",{})
-    bd    = db_get("blocked_dates",[])
+    slots        = db_get("slots",{})
+    closed_slots = db_get("closed_slots",{})
     if ds not in slots: slots[ds] = []
     if tm not in slots[ds]:
         slots[ds].append(tm); slots[ds] = sorted(slots[ds])
-    db_set("slots",slots)
+    if ds in closed_slots and tm in closed_slots[ds]:
+        closed_slots[ds].remove(tm)
+    db_set("slots",slots); db_set("closed_slots",closed_slots)
     await cb.answer(f"🟢 Слот {tm} открыт")
     await cb.message.delete()
     await cb.message.answer(
@@ -1476,14 +1601,21 @@ async def aslot_open(cb: types.CallbackQuery):
 async def adm_toggle_slot(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
-    slots = db_get("slots",{})
+    slots        = db_get("slots",{})
+    closed_slots = db_get("closed_slots",{})
     if ds not in slots: slots[ds] = []
+    if ds not in closed_slots: closed_slots[ds] = []
     if tm in slots[ds]:
-        slots[ds].remove(tm); await cb.answer(f"🔴 Слот {tm} закрыт")
+        # Закрываем: убираем из открытых, добавляем в закрытые
+        slots[ds].remove(tm)
+        if tm not in closed_slots[ds]: closed_slots[ds].append(tm)
+        await cb.answer(f"🔴 Слот {tm} закрыт")
     else:
+        # Открываем: добавляем в открытые, убираем из закрытых
         slots[ds].append(tm); slots[ds] = sorted(slots[ds])
+        if tm in closed_slots[ds]: closed_slots[ds].remove(tm)
         await cb.answer(f"🟢 Слот {tm} открыт")
-    db_set("slots",slots)
+    db_set("slots",slots); db_set("closed_slots",closed_slots)
     await cb.message.delete()
     await cb.message.answer(f"📅 *{ds}*", parse_mode="Markdown",
                              reply_markup=slots_day_admin(ds))
@@ -1969,6 +2101,115 @@ async def stype_cb(cb: types.CallbackQuery):
  
 # ── ОСНОВНОЙ ОБРАБОТЧИК ТЕКСТА ───────────────────────────────────────────
  
+ 
+@dp.callback_query(F.data.startswith("pay_rf_"))
+async def pay_rf(cb: types.CallbackQuery):
+    parts = cb.data.split("_"); uid_c = parts[2]; ds = parts[3]; tm = parts[4]
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Оплатил",
+                              callback_data=f"paid_confirm_{uid_c}_{ds}_{tm}_rf")],
+    ])
+    await cb.answer()
+    await cb.message.answer(RF_CARD, parse_mode="Markdown", reply_markup=kb)
+ 
+@dp.callback_query(F.data.startswith("pay_foreign_"))
+async def pay_foreign(cb: types.CallbackQuery):
+    parts = cb.data.split("_"); uid_c = parts[2]; ds = parts[3]; tm = parts[4]
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Оплатил",
+                              callback_data=f"paid_confirm_{uid_c}_{ds}_{tm}_foreign")],
+    ])
+    await cb.answer()
+    await cb.message.answer(FOREIGN_CARD, parse_mode="Markdown", reply_markup=kb)
+ 
+@dp.callback_query(F.data.startswith("paid_confirm_"))
+async def paid_confirm(cb: types.CallbackQuery):
+    parts  = cb.data.split("_")
+    uid_c  = parts[2]; ds = parts[3]; tm = parts[4]; method = parts[5]
+    method_label = "💳 Карта РФ/СБП" if method == "rf" else "💳 Зарубежная карта"
+    await cb.answer("✅ Спасибо! Ожидайте подтверждения.", show_alert=False)
+    await cb.message.edit_reply_markup(reply_markup=None)
+    await cb.message.answer(
+        "✅ Спасибо! Сообщение об оплате отправлено.\n"
+        "Евгений подтвердит получение.")
+    appts = db_get("appts", {})
+    name = "—"; uname = "—"; dur = "—"
+    for r in appts.get(ds, []):
+        if r["time"] == tm:
+            r["payment_reported"] = True
+            r["payment_method"]   = method_label
+            name  = r.get("name","—")
+            uname = r.get("username","—")
+            dur   = r.get("duration","—")
+    db_set("appts", appts)
+    price = PRICES.get(dur, 5000)
+    await notify_adm(
+        f"💰 *Клиент сообщил об оплате!*\n\n"
+        f"📅 {ds} в {tm} МСК\n"
+        f"👤 {name} @{uname}\n"
+        f"💳 {method_label}\n"
+        f"💵 {price:,} руб. | ⏱ {dur}")
+ 
+ 
+@dp.callback_query(F.data.startswith("pay_ru_"))
+async def pay_ru(cb: types.CallbackQuery):
+    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Оплатил",
+                             callback_data=f"paid_confirm_{uid}_{ds}_{tm}")
+    ]])
+    await cb.answer()
+    await cb.message.answer(PAYMENT_CARD_RU, parse_mode="Markdown", reply_markup=kb)
+ 
+@dp.callback_query(F.data.startswith("pay_intl_"))
+async def pay_intl(cb: types.CallbackQuery):
+    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Оплатил",
+                             callback_data=f"paid_confirm_{uid}_{ds}_{tm}")
+    ]])
+    await cb.answer()
+    await cb.message.answer(PAYMENT_CARD_INTL, parse_mode="Markdown", reply_markup=kb)
+ 
+@dp.callback_query(F.data.startswith("paid_confirm_"))
+async def paid_confirm(cb: types.CallbackQuery):
+    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
+    # Отмечаем оплату в записи
+    appts = db_get("appts", {})
+    for r in appts.get(ds, []):
+        if r["user_id"] == uid and r["time"] == tm:
+            r["paid"] = True
+    db_set("appts", appts)
+    await cb.answer("✅ Спасибо! Информация об оплате отправлена.")
+    await cb.message.edit_text(cb.message.text + "\n\n✅ *Оплата подтверждена клиентом*",
+                               parse_mode="Markdown")
+    # Уведомляем Евгения
+    await notify_adm(
+        f"💰 *Клиент сообщил об оплате!*\n\n"
+        f"📅 {ds} в {tm} МСК\n"
+        f"🆔 ID: {uid}\n\n"
+        f"Проверьте поступление средств.")
+ 
+ 
+@dp.callback_query(F.data.startswith("adm_book_blocked_"))
+async def adm_book_blocked(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
+    uid   = cb.from_user.id
+    st    = get_st(uid)
+    # Если уже есть username — сразу к платформе
+    if st.get("manual_tg"):
+        st["book_ds"] = ds; st["book_tm"] = tm; st["step"] = "adm_manual_plat"
+        set_st(uid, st)
+        await cb.answer()
+        await cb.message.answer(
+            f"✅ @{st['manual_tg']} - *{ds}* в *{tm}*\n\nПлатформа для связи?",
+            parse_mode="Markdown", reply_markup=kb_platform("adm_back"))
+    else:
+        set_st(uid, {"step":"adm_manual_tg","book_ds":ds,"book_tm":tm})
+        await cb.answer()
+        await cb.message.answer("Введите username клиента в Telegram (без @):")
+ 
 @dp.message()
 async def handle_text(msg: types.Message):
     uid  = msg.from_user.id
@@ -2233,4 +2474,3 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
- 
