@@ -562,8 +562,17 @@ def cal_admin(year, month):
         InlineKeyboardButton(text="✅ МЕСЯЦ ОТКРЫТЬ",  callback_data="adm_open_month"),
         InlineKeyboardButton(text="❌ МЕСЯЦ ЗАКРЫТЬ",  callback_data="adm_block_month"),
     ])
-    # Назад в меню админа
-    rows.append([InlineKeyboardButton(text="↩️ НАЗАД", callback_data="adm_back")])
+    # Все кнопки меню админа прямо под календарём
+    rows.append([InlineKeyboardButton(text="🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ", callback_data="adm_unconf")])
+    rows.append([InlineKeyboardButton(text="📋 ВСЕ ЗАПИСИ",              callback_data="adm_list")])
+    rows.append([InlineKeyboardButton(text="📈 АНАЛИТИКА",               callback_data="adm_analytics")])
+    rows.append([
+        InlineKeyboardButton(text="📤 РАССЫЛКА ВСЕМ",  callback_data="adm_broadcast"),
+        InlineKeyboardButton(text="📤 ПОСТ ИЗ КАНАЛА", callback_data="adm_post"),
+    ])
+    rows.append([InlineKeyboardButton(text="👥 ПОСТОЯННЫЕ КЛИЕНТЫ",  callback_data="adm_regulars")])
+    rows.append([InlineKeyboardButton(text="🗑 УДАЛИТЬ КЛИЕНТА",      callback_data="adm_delete_client")])
+    rows.append([InlineKeyboardButton(text="🏠 МЕНЮ КЛИЕНТА",         callback_data="main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_month_picker(action="close"):
@@ -920,16 +929,9 @@ async def cmd_handler(msg: types.Message):
         return
  
     is_adm = is_admin(msg.from_user.username)
-    if is_adm:
-        # Для админа показываем сразу календарь
-        today = date.today()
-        await msg.answer(
-            "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт",
-            parse_mode="Markdown", reply_markup=cal_admin(today.year, today.month))
-    else:
-        await msg.answer(
-            "Хорошо что решил зайти. Это уже первый шаг.\n\nВыбери с чего начнём 👇",
-            reply_markup=kb_main(is_adm=False))
+    await msg.answer(
+        "Хорошо что решил зайти. Это уже первый шаг.\n\nВыбери с чего начнём 👇",
+        reply_markup=kb_main(is_adm=is_adm))
  
 @dp.callback_query(F.data == "noop")
 async def noop(cb): await cb.answer()
@@ -951,6 +953,12 @@ async def adm_back(cb: types.CallbackQuery):
     await eoa(cb,
         "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт",
         kb=cal_admin(today.year, today.month))
+ 
+@dp.callback_query(F.data == "adm_menu")
+async def adm_menu(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    await cb.answer()
+    await eoa(cb, "🔐 *МЕНЮ АДМИНИСТРАТОРА*", kb=kb_admin())
  
 @dp.callback_query(F.data == "about")
 async def about(cb: types.CallbackQuery):
@@ -2522,4 +2530,6 @@ async def main():
     asyncio.create_task(bg_loop())
     await dp.start_polling(bot)
  
-if __name__=="__main__":
+ 
+if __name__ == "__main__":
+    asyncio.run(main())
