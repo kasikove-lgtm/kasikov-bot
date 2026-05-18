@@ -1,5 +1,5 @@
 """
-Бот Евгения Касикова v10.0
+Бот Евгения Касикова v11.0
 """
 import asyncio, os, shelve, calendar, re, logging, sys, io
 from datetime import datetime, date, timedelta
@@ -64,10 +64,10 @@ bot = Bot(token=TOKEN)
 dp  = Dispatcher()
 DB  = "kasikov_bot"
  
-def db_get(k,d=None):
-    with shelve.open(DB) as s: return s.get(k,d)
-def db_set(k,v):
-    with shelve.open(DB) as s: s[k]=v
+def db_get(k, d=None):
+    with shelve.open(DB) as s: return s.get(k, d)
+def db_set(k, v):
+    with shelve.open(DB) as s: s[k] = v
 def db_init():
     for k,v in [
         ("slots",{}),("appts",{}),("admin_chats",[]),("blocked",[]),
@@ -77,125 +77,146 @@ def db_init():
         ("users_src",{}),("free_used",{}),("all_users_data",{}),
         ("feedback_timer",{}),
     ]:
-        if db_get(k) is None: db_set(k,v)
+        if db_get(k) is None: db_set(k, v)
 db_init()
  
 def get_st(uid): return db_get("states",{}).get(str(uid),{})
-def set_st(uid,st):
-    s=db_get("states",{}); s[str(uid)]=st; db_set("states",s)
+def set_st(uid, st):
+    s = db_get("states",{}); s[str(uid)] = st; db_set("states", s)
 def clr_st(uid):
-    s=db_get("states",{}); s.pop(str(uid),None); db_set("states",s)
+    s = db_get("states",{}); s.pop(str(uid), None); db_set("states", s)
  
-_fl={}; _fc={}
-BAD=["блять","бля","блядь","хуй","пиздец","пизда","ёбаный","ебать","ебал",
-     "сука","суки","мудак","шлюха","пидор","гандон","ублюдок","долбоёб",
-     "манда","жопа","нахуй","курва","дерьмо","fuck","shit","bitch","asshole","cunt"]
+_fl = {}; _fc = {}
+BAD = ["блять","бля","блядь","хуй","пиздец","пизда","ёбаный","ебать","ебал",
+       "сука","суки","мудак","шлюха","пидор","гандон","ублюдок","долбоёб",
+       "манда","жопа","нахуй","курва","дерьмо","fuck","shit","bitch","asshole","cunt"]
 def has_bad(t): return any(w in t.lower() for w in BAD)
-def viol(uid,tp):
-    v=db_get("violations",{}); v.setdefault(str(uid),{})[tp]=v.get(str(uid),{}).get(tp,0)+1
+def viol(uid, tp):
+    v = db_get("violations",{}); v.setdefault(str(uid),{})[tp] = v.get(str(uid),{}).get(tp,0)+1
     db_set("violations",v); return v[str(uid)][tp]
 def is_flood(uid):
-    now=datetime.now().timestamp()
-    if now-_fl.get(uid,0)<2:
-        c=_fc.get(uid,0)+1; _fc[uid]=c
-        if c>15 and viol(uid,"spam")>=5: asyncio.create_task(_auto_block(uid,"спам"))
+    now = datetime.now().timestamp()
+    if now - _fl.get(uid,0) < 2:
+        c = _fc.get(uid,0)+1; _fc[uid] = c
+        if c > 15 and viol(uid,"spam") >= 5: asyncio.create_task(_auto_block(uid,"спам"))
         return True
-    _fl[uid]=now; _fc[uid]=0; return False
+    _fl[uid] = now; _fc[uid] = 0; return False
  
 def is_blocked(uid): return uid in db_get("blocked",[])
 def is_admin(u): return bool(u) and u.lower() in [a.lower() for a in ADMINS]
  
-async def _auto_block(uid,reason):
-    bl=db_get("blocked",[])
+async def _auto_block(uid, reason):
+    bl = db_get("blocked",[])
     if uid not in bl: bl.append(uid); db_set("blocked",bl)
     await notify_adm(f"🚫 *Автоблок*\nID: {uid}\nПричина: {reason}")
  
-def reg_user(uid,username=None,first_name=None):
-    u=db_get("users",[])
+def reg_user(uid, username=None, first_name=None):
+    u = db_get("users",[])
     if uid not in u: u.append(uid); db_set("users",u)
     if username or first_name:
-        ud=db_get("all_users_data",{})
-        ud[str(uid)]={"username":username or "","name":first_name or "","uid":uid}
+        ud = db_get("all_users_data",{})
+        ud[str(uid)] = {"username":username or "","name":first_name or "","uid":uid}
         db_set("all_users_data",ud)
  
-def log_act(uid,uname,act):
-    ls=db_get("logs",[]); ls.append({"uid":uid,"u":uname or "?","a":act,
+def log_act(uid, uname, act):
+    ls = db_get("logs",[]); ls.append({"uid":uid,"u":uname or "?","a":act,
         "t":datetime.now().strftime("%d.%m.%Y %H:%M:%S")})
-    if len(ls)>1000: ls=ls[-1000:]
+    if len(ls) > 1000: ls = ls[-1000:]
     db_set("logs",ls)
  
 async def is_sub(uid):
     try:
-        m=await bot.get_chat_member(CHANNEL,uid)
+        m = await bot.get_chat_member(CHANNEL, uid)
         return m.status in ("member","administrator","creator")
     except Exception as e:
         log.warning(f"is_sub error {uid}: {e}")
         return False
  
-async def notify_adm(text,kb=None):
+async def notify_adm(text, kb=None):
     for cid in db_get("admin_chats",[]):
-        try: await bot.send_message(cid,text,parse_mode="Markdown",reply_markup=kb)
+        try: await bot.send_message(cid, text, parse_mode="Markdown", reply_markup=kb)
         except: pass
  
-def get_free_used(uid): return db_get("free_used",{}).get(str(uid),False)
-def set_free_used(uid,val=True):
-    fu=db_get("free_used",{}); fu[str(uid)]=val; db_set("free_used",fu)
+def get_free_used(uid): return db_get("free_used",{}).get(str(uid), False)
+def set_free_used(uid, val=True):
+    fu = db_get("free_used",{}); fu[str(uid)] = val; db_set("free_used",fu)
  
 def day_slots_all():
-    r=[]; c=datetime.strptime("10:00","%H:%M"); e=datetime.strptime("21:00","%H:%M")
-    while c<=e: r.append(c.strftime("%H:%M")); c+=timedelta(minutes=30)
+    r = []; c = datetime.strptime("10:00","%H:%M"); e = datetime.strptime("21:00","%H:%M")
+    while c <= e: r.append(c.strftime("%H:%M")); c += timedelta(minutes=30)
     return r
-ALL_SLOTS=day_slots_all()
-MN_RU=["Январь","Февраль","Март","Апрель","Май","Июнь",
-       "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
-MN_SHORT=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"]
+ALL_SLOTS = day_slots_all()
+MN_RU    = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+            "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
+MN_SHORT = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"]
  
 def fmt_date(ds):
-    """2026-05-16 -> 16 мая 2026"""
     try:
-        d=datetime.strptime(ds,"%Y-%m-%d")
+        d = datetime.strptime(ds,"%Y-%m-%d")
         return f"{d.day} {MN_RU[d.month-1].lower()} {d.year}"
     except: return ds
  
-def _block_adj(ds,tm,dur,unblock=False):
-    dm={"30 мин":1,"1 час":2,"1.5 часа":3,"2 часа":4,"2.5 часа":5,"3 часа":6}
-    n=dm.get(dur,2)
-    if n<=1: return
-    try: sdt=datetime.strptime(f"{ds} {tm}","%Y-%m-%d %H:%M")
+def get_user_src(uid):
+    return db_get("users_src",{}).get(str(uid), "")
+ 
+def _block_adj(ds, tm, dur, unblock=False):
+    dm = {"30 мин":1,"1 час":2,"1.5 часа":3,"2 часа":4,"2.5 часа":5,"3 часа":6}
+    n  = dm.get(dur, 2)
+    if n <= 1: return
+    try: sdt = datetime.strptime(f"{ds} {tm}","%Y-%m-%d %H:%M")
     except: return
-    cs=db_get("closed_slots",{})
-    if ds not in cs: cs[ds]=[]
-    for i in range(1,n):
-        st=(sdt+timedelta(minutes=30*i)).strftime("%H:%M")
+    cs = db_get("closed_slots",{})
+    if ds not in cs: cs[ds] = []
+    for i in range(1, n):
+        slot_tm = (sdt + timedelta(minutes=30*i)).strftime("%H:%M")
         if unblock:
-            if st in cs[ds]: cs[ds].remove(st)
+            if slot_tm in cs[ds]: cs[ds].remove(slot_tm)
         else:
-            if st not in cs[ds]: cs[ds].append(st)
+            if slot_tm not in cs[ds]: cs[ds].append(slot_tm)
     db_set("closed_slots",cs)
  
 def free_slots(ds):
-    slots=db_get("slots",{}); cs=db_get("closed_slots",{})
-    appts=db_get("appts",{}); bd=db_get("blocked_dates",[])
+    slots  = db_get("slots",{}); cs = db_get("closed_slots",{})
+    appts  = db_get("appts",{}); bd = db_get("blocked_dates",[])
     if ds in bd: return []
-    taken=[r["time"] for r in appts.get(ds,[])]
-    closed=cs.get(ds,[])
-    today=date.today(); now=datetime.now()
-    result=[]
+    taken  = [r["time"] for r in appts.get(ds,[])]
+    closed = cs.get(ds,[])
+    today  = date.today(); now = datetime.now()
+    result = []
     for t in slots.get(ds,[]):
         if t in taken or t in closed: continue
-        if datetime.strptime(ds,"%Y-%m-%d").date()==today:
-            se=datetime.strptime(f"{ds} {t}","%Y-%m-%d %H:%M")+timedelta(minutes=30)
-            if se<=now: continue
+        slot_dt = datetime.strptime(f"{ds} {t}","%Y-%m-%d %H:%M")
+        # Клиенту показываем слоты только через 2 часа от текущего
+        if datetime.strptime(ds,"%Y-%m-%d").date() == today:
+            if slot_dt <= now + timedelta(hours=2): continue
         result.append(t)
     return result
  
-def has_booking(uid,ds):
-    return any(r["user_id"]==uid for r in db_get("appts",{}).get(ds,[]))
+def has_booking(uid, ds):
+    return any(r["user_id"] == uid for r in db_get("appts",{}).get(ds,[]))
  
-# edit_or_answer - только для админки
-async def eoa(cb,text,kb=None,pm="Markdown"):
-    try: await cb.message.edit_text(text,parse_mode=pm,reply_markup=kb)
-    except: await cb.message.answer(text,parse_mode=pm,reply_markup=kb)
+# edit_or_answer — ТОЛЬКО для админки
+async def eoa(cb, text, kb=None, pm="Markdown"):
+    try: await cb.message.edit_text(text, parse_mode=pm, reply_markup=kb)
+    except: await cb.message.answer(text, parse_mode=pm, reply_markup=kb)
+ 
+# ═══════════════════════════════════════════════════
+# НАВИГАЦИЯ — единая логика для всех кнопок
+# Глубина 1: только ↩️ НАЗАД
+# Глубина 2+: ↩️ НАЗАД + ГЛАВНОЕ МЕНЮ (клиент) или МЕНЮ АДМИНА (админ)
+# ═══════════════════════════════════════════════════
+ 
+def nav_client(back_cb, depth=1):
+    row = [InlineKeyboardButton(text="↩️ НАЗАД", callback_data=back_cb)]
+    if depth >= 2:
+        row.append(InlineKeyboardButton(text="🏠 ГЛАВНОЕ МЕНЮ", callback_data="main"))
+    return [row]
+ 
+def nav_admin(back_cb, depth=1):
+    row = [InlineKeyboardButton(text="↩️ НАЗАД", callback_data=back_cb)]
+    if depth >= 2:
+        row.append(InlineKeyboardButton(text="🔐 МЕНЮ АДМИНА", callback_data="adm_back"))
+    return [row]
  
 # ═══════════════════════════════════════════════════
 # ТЕКСТЫ
@@ -331,37 +352,34 @@ T_FAQ = """❓ *FAQ - ЧАСТЫЕ ВОПРОСЫ*
 Да. Всё что происходит на сессии - остаётся между нами.
  
 *Как проходит первая встреча?*
-30 минут по видео. Никакого давления и обязательств. После встречи получишь письменный разбор с темами и рекомендациями.
+30 минут по видео. Просто поговорим - без подготовки и без обязательств. После встречи получишь письменную обратную связь по своей ситуации, моё видение как можно работать дальше и направление куда стоит смотреть в первую очередь.
  
 *Можно перенести или отменить?*
-Да, если предупредил минимум за 24 часа. Написать можно сюда: @kasikovevgenii
+Да, если предупредил минимум за 24 часа. Напиши прямо здесь в боте - нажми на свою запись в разделе 📅 Мои записи.
  
 *Ты работаешь только с мужчинами?*
 Нет. Около половины моих клиентов - женщины.
  
 *Сколько сессий нужно?*
-Зависит от запроса. После первой встречи будет понятно что подходит именно тебе.
+У всех по-разному - зависит от ситуации и запроса. После первой бесплатной встречи дам предварительные рекомендации по количеству сессий и направлениям работы.
  
 *Как технически проходит сессия?*
 По видеосвязи - Zoom, ВКонтакте, Яндекс Телемост, Google Meet, Teams, MAX.
  
 *Я никогда не был у психолога. С чего начать?*
-Просто приходи на первую встречу. Никакой подготовки не нужно - расскажешь что происходит своими словами.
+Просто приходи на первую бесплатную встречу. Никакой подготовки не нужно - расскажешь что происходит своими словами. Дальше разберёмся вместе.
  
 *А вдруг не поможет?*
-Честный ответ - я не даю гарантий. Но после первой встречи ты уйдёшь с ясностью и пониманием что делать дальше.
- 
-*Мне стыдно что не могу справиться сам.*
-На сессии нет слабых и сильных. Есть человек и его ситуация. Я там был сам - осуждать мне нечего.
+Честный ответ - я не даю гарантий. Но как правило после первой встречи становится хотя бы немного легче, и появляется понимание в каком направлении двигаться дальше.
  
 *Мне сейчас очень плохо. Насколько быстро можно попасть к тебе?*
-Напиши мне напрямую - @kasikovevgenii. Постараюсь найти ближайший свободный слот.
+Запишись через бота - мне сразу придёт уведомление. Постараюсь подтвердить ближайший свободный слот в течение нескольких часов.
  
 *Можно работать если я не в Москве?*
 Да, работаю полностью онлайн. Часовой пояс согласуем.
  
 *А вдруг я хочу вернуть отношения - ты поможешь?*
-Да, работаю с этим. Но сначала разберёмся что за этим желанием стоит.
+Да, работаю с этим. Но сначала разберёмся что за этим желанием стоит - иногда ответ меняется когда становится яснее.
  
 *Как долго длится восстановление после расставания?*
 У всех по-разному. Но есть вещи которые сильно ускоряют процесс - и именно с ними мы работаем.
@@ -370,30 +388,30 @@ T_FAQ = """❓ *FAQ - ЧАСТЫЕ ВОПРОСЫ*
 Да. Работаем с тобой - этого достаточно чтобы что-то начало меняться.
  
 *У меня паника, не могу есть и спать. Это вообще нормально?*
-Да, это типичная реакция на потерю. Именно с таким состоянием и приходят на первую встречу.
+Да, это типичная реакция на потерю. Именно с таким состоянием и приходят на первую встречу - не нужно ждать пока станет легче.
  
 *Я уже был у психолога - не помогло.*
-Понимаю. Многое зависит от метода и от того насколько специалист понимает твою ситуацию. Первая встреча покажет подходим ли мы.
+Понимаю. Многое зависит от метода и от того насколько специалист понимает твою конкретную ситуацию. Первая встреча покажет подходим ли мы друг другу.
  
 *Онлайн - это так же эффективно как вживую?*
-Да. Практика показывает что результат не отличается. Плюс не нужно никуда ехать.
+Да. Практика показывает что результат не отличается. Плюс не нужно никуда ехать - можно из дома в удобное время.
  
 *Сколько стоит сессия?*
-Смотри кнопку «ПЛАТНАЯ КОНСУЛЬТАЦИЯ» в меню.
+Нажми кнопку 💳 ПЛАТНАЯ КОНСУЛЬТАЦИЯ в главном меню - там все форматы и цены.
  
 *Почему пакет из 5 сессий выгоднее?*
-Глубокая работа требует времени. Пакет даёт ритм и последовательность.
+Глубокая работа требует времени. Пакет даёт ритм и последовательность - именно это даёт результат, а не разовые встречи.
  
 *Я не знаю готов ли я вообще работать с психологом.*
-Это нормально. Первая встреча ни к чему не обязывает.
+Это нормально. Первая встреча ни к чему не обязывает - просто поговорим и посмотрим.
  
 *Мне стыдно что не могу справиться сам.*
-Справляться в одиночку со сложной ситуацией - это не сила, это лишняя нагрузка.
+Справляться в одиночку со сложной ситуацией - это не сила, это лишняя нагрузка. Осуждать здесь нечего и некому.
  
 *Может просто поговорить с другом?*
-Можно. Но друг слышит тебя через свои фильтры. На сессии ты получаешь взгляд со стороны без оценок.
+Можно. Но друг слышит тебя через свои фильтры и свои тревоги. На сессии ты получаешь взгляд со стороны без оценок и без чужих эмоций.
  
-*Онлайн - противоречит ли это моим убеждениям?*
+*Психология не противоречит моим религиозным убеждениям?*
 Я не навязываю никакой картины мира. Работаем с тем что есть у тебя."""
  
 T_FREE1 = """Решиться на первый шаг бывает непросто. Это нормально.
@@ -402,12 +420,7 @@ T_FREE1 = """Решиться на первый шаг бывает непрос
  
 После встречи получишь письменный разбор с конкретными темами и рекомендациями. Он останется с тобой - независимо от того, решишь ли продолжать работу со мной."""
  
-T_FREE2 = """Работаю по видео - ВКонтакте, Zoom, Яндекс Телемост, Google Meet, Teams, MAX.
- 
-Найди тихое место где тебя не будут отвлекать - это важно для разговора.
- 
-Выбери удобную дату 👇
-✅ - есть свободные слоты{W}"""
+T_FREE2 = "Работаю по видео - ВКонтакте, Zoom, Яндекс Телемост, Google Meet, Teams, MAX.\n\nНайди тихое место где тебя не будут отвлекать - это важно для разговора.\n\nВыбери удобную дату 👇\n✅ - есть свободные слоты"
  
 T_FEEDBACK = """Независимо от того, будешь ли ты работать со мной дальше - хочу попросить короткую обратную связь по нашей первой сессии.
  
@@ -419,19 +432,19 @@ T_FEEDBACK = """Независимо от того, будешь ли ты ра�
 4. Планируешь ли продолжать работу дальше?"""
  
 DRIP = {
-    1:   {"text": "Гайд уже у тебя. Открывай когда будешь готов - там есть одна практика которую можно сделать прямо сегодня.", "kb": "free"},
-    7:   {"text": "После расставания больно не потому что ты слабый.\n\nНейробиолог Этан Кросс: мозг воспринимает социальную боль в тех же зонах что и физическую. Когда тебе разбивают сердце - мозг регистрирует это как удар. Буквально.\n\nТы терял не просто человека. Ты терял версию себя который существовал рядом с этим человеком.\n\nБоль после расставания - это не слабость.", "kb": "channel"},
-    14:  {"text": "Три вещи которые не надо делать в первый месяц. Я сам делал все три.\n\n1. Новые отношения сразу - рана переезжает, не заживает.\n2. Полный контакт с бывшим - мозгу нужна дистанция.\n3. Заливать боль чем угодно - она накапливается и потом выходит.", "kb": "channel"},
-    30:  {"text": "Прошёл месяц. Как ты?\n\nЕсли чувствуешь что стало не легче а тяжелее - это сигнал. Не «возьми себя в руки». А сигнал что иногда в одиночку дольше и тяжелее.\n\nЕсли актуально 👇", "kb": "free"},
-    60:  {"text": "Почему ты скучаешь по тому кто причинил тебе боль?\n\nПсихиатр Сью Джонсон: мозг привязывается не к хорошим людям. Он привязывается к знакомым.\n\nТы скучаешь не по человеку. Ты скучаешь по версии себя который верил что всё получится.\n\nКогда понимаешь это - отпускание происходит само.", "kb": "channel"},
-    90:  {"text": "Почему ты снова выбираешь похожих людей?\n\nДжеффри Янг: убеждения «я недостаточно хорош», «меня всё равно бросят» формируются рано и управляют выбором партнёров.\n\nЭто не твоя вина. Но это твоя ответственность - если хочешь что-то изменить.", "kb": "channel"},
-    120: {"text": "Злость после расставания - куда её деть?\n\nЛесли Гринберг: злость после расставания чаще всего вторичная эмоция. За ней прячется страх, боль, стыд.\n\nЗлость которую подавляют - разворачивается внутрь и становится депрессией. Злость которую проживают - проходит.", "kb": "channel"},
-    150: {"text": "Как перестать проверять соцсети бывшего?\n\nРоберт Сапольски: мозг выделяет дофамин не когда получает награду - а когда ожидает её. Поэтому ты снова заходишь на его страницу.\n\nПервый шаг - убрать доступ. Заблокировать. Не потому что ты слабый. А потому что ты умный.", "kb": "channel"},
-    180: {"text": "Разница между горем и депрессией.\n\nГоре движется. Медленно - но движется. Депрессия - стойкое ощущение пустоты больше двух недель.\n\nЕсли через два месяца не становится хотя бы немного легче - это сигнал обратиться за помощью.", "kb": "channel"},
-    210: {"text": "Тревожная привязанность - почему одни страдают после расставания сильнее других.\n\nДжон Боулби: паттерн привязанности формируется в первые годы жизни.\n\nДля человека с тревожной привязанностью расставание - это не просто потеря. Это подтверждение: «я недостаточно хорош».\n\nТип привязанности не приговор - он меняется.", "kb": "channel"},
-    240: {"text": "Как говорить с детьми о разводе.\n\nДжудит Валлерстайн: дети переживают не сам развод, а то как родители ведут себя во время и после него.\n\nТри вещи:\n1. «Мы решили жить отдельно. Это не твоя вина.»\n2. Никогда не делай ребёнка союзником против другого родителя.\n3. Дай ребёнку право на все чувства.", "kb": "channel"},
-    270: {"text": "Когда ты готов к новым отношениям.\n\nТы можешь думать о бывшем без острой боли. Ты знаешь что пошло не так. Ты хочешь новых отношений - а не хочешь убежать от одиночества.\n\nХарвилл Хендрикс: зрелые отношения начинаются с двух целостных людей.", "kb": "free"},
-    300: {"text": "Путь у каждого свой. Если захочешь пройти его с поддержкой - я здесь.\n\nПервая встреча по-прежнему бесплатно 👇", "kb": "free"},
+    1:   {"text":"Гайд уже у тебя. Открывай когда будешь готов - там есть одна практика которую можно сделать прямо сегодня.", "kb":"free"},
+    7:   {"text":"После расставания больно не потому что ты слабый.\n\nНейробиолог Этан Кросс: мозг воспринимает социальную боль в тех же зонах что и физическую. Когда тебе разбивают сердце - мозг регистрирует это как удар. Буквально.\n\nТы терял не просто человека. Ты терял версию себя который существовал рядом с этим человеком.\n\nБоль после расставания - это не слабость.", "kb":"channel"},
+    14:  {"text":"Три вещи которые не надо делать в первый месяц. Я сам делал все три.\n\n1. Новые отношения сразу - рана переезжает, не заживает.\n2. Полный контакт с бывшим - мозгу нужна дистанция.\n3. Заливать боль чем угодно - она накапливается и потом выходит.", "kb":"channel"},
+    30:  {"text":"Прошёл месяц. Как ты?\n\nЕсли чувствуешь что стало не легче а тяжелее - это сигнал. Не «возьми себя в руки». А сигнал что иногда в одиночку дольше и тяжелее.\n\nЕсли актуально 👇", "kb":"free"},
+    60:  {"text":"Почему ты скучаешь по тому кто причинил тебе боль?\n\nПсихиатр Сью Джонсон: мозг привязывается не к хорошим людям. Он привязывается к знакомым.\n\nТы скучаешь не по человеку. Ты скучаешь по версии себя который верил что всё получится.\n\nКогда понимаешь это - отпускание происходит само.", "kb":"channel"},
+    90:  {"text":"Почему ты снова выбираешь похожих людей?\n\nДжеффри Янг: убеждения «я недостаточно хорош», «меня всё равно бросят» формируются рано и управляют выбором партнёров.\n\nЭто не твоя вина. Но это твоя ответственность - если хочешь что-то изменить.", "kb":"channel"},
+    120: {"text":"Злость после расставания - куда её деть?\n\nЛесли Гринберг: злость после расставания чаще всего вторичная эмоция. За ней прячется страх, боль, стыд.\n\nЗлость которую подавляют - разворачивается внутрь и становится депрессией. Злость которую проживают - проходит.", "kb":"channel"},
+    150: {"text":"Как перестать проверять соцсети бывшего?\n\nРоберт Сапольски: мозг выделяет дофамин не когда получает награду - а когда ожидает её. Поэтому ты снова заходишь на его страницу.\n\nПервый шаг - убрать доступ. Заблокировать. Не потому что ты слабый. А потому что ты умный.", "kb":"channel"},
+    180: {"text":"Разница между горем и депрессией.\n\nГоре движется. Медленно - но движется. Депрессия - стойкое ощущение пустоты больше двух недель.\n\nЕсли через два месяца не становится хотя бы немного легче - это сигнал обратиться за помощью.", "kb":"channel"},
+    210: {"text":"Тревожная привязанность - почему одни страдают после расставания сильнее других.\n\nДжон Боулби: паттерн привязанности формируется в первые годы жизни.\n\nДля человека с тревожной привязанностью расставание - это не просто потеря. Это подтверждение: «я недостаточно хорош».\n\nТип привязанности не приговор - он меняется.", "kb":"channel"},
+    240: {"text":"Как говорить с детьми о разводе.\n\nДжудит Валлерстайн: дети переживают не сам развод, а то как родители ведут себя во время и после него.\n\nТри вещи:\n1. «Мы решили жить отдельно. Это не твоя вина.»\n2. Никогда не делай ребёнка союзником против другого родителя.\n3. Дай ребёнку право на все чувства.", "kb":"channel"},
+    270: {"text":"Когда ты готов к новым отношениям.\n\nТы можешь думать о бывшем без острой боли. Ты знаешь что пошло не так. Ты хочешь новых отношений - а не хочешь убежать от одиночества.\n\nХарвилл Хендрикс: зрелые отношения начинаются с двух целостных людей.", "kb":"free"},
+    300: {"text":"Путь у каждого свой. Если захочешь пройти его с поддержкой - я здесь.\n\nПервая встреча по-прежнему бесплатно 👇", "kb":"free"},
 }
  
 # ═══════════════════════════════════════════════════
@@ -440,12 +453,12 @@ DRIP = {
  
 def kb_main(is_adm=False):
     rows = [
-        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="💳 ПЛАТНАЯ КОНСУЛЬТАЦИЯ",        callback_data="paid_info")],
-        [InlineKeyboardButton(text="🎁 ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»", callback_data="guide")],
-        [InlineKeyboardButton(text="💼 ОБО МНЕ",                     callback_data="about")],
-        [InlineKeyboardButton(text="❓ FAQ ЧАСТЫЕ ВОПРОСЫ",           callback_data="faq")],
-        [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",                   callback_data="my_appts")],
+        [InlineKeyboardButton(text="🎁 ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»",   callback_data="guide")],
+        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО",         callback_data="free")],
+        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",            callback_data="paid_info")],
+        [InlineKeyboardButton(text="💼 ОБО МНЕ",                            callback_data="about")],
+        [InlineKeyboardButton(text="❓ FAQ ЧАСТЫЕ ВОПРОСЫ",                 callback_data="faq")],
+        [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",                         callback_data="my_appts")],
         [InlineKeyboardButton(text="📢 МОЙ TELEGRAM-КАНАЛ",
                               url=f"https://t.me/{CHANNEL.lstrip('@')}")],
     ]
@@ -453,56 +466,9 @@ def kb_main(is_adm=False):
         rows.append([InlineKeyboardButton(text="🔐 МЕНЮ АДМИНА", callback_data="adm_back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
-def kb_nav(back_cb, depth=1, is_adm=False):
-    """Навигационные кнопки: НАЗАД всегда, ГЛАВНОЕ МЕНЮ с глубины 2+"""
-    rows = []
-    nav = [InlineKeyboardButton(text="↩️ НАЗАД", callback_data=back_cb)]
-    if depth >= 2:
-        if is_adm:
-            nav.append(InlineKeyboardButton(text="🔐 МЕНЮ АДМИНА", callback_data="adm_back"))
-        else:
-            nav.append(InlineKeyboardButton(text="🏠 ГЛАВНОЕ МЕНЮ", callback_data="main"))
-    rows.append(nav)
-    return rows
- 
-def kb_client(back_cb, extra_rows=None, depth=1):
-    rows = extra_rows or []
-    rows += kb_nav(back_cb, depth=depth, is_adm=False)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
- 
-def kb_adm_nav(back_cb, extra_rows=None, depth=1):
-    rows = extra_rows or []
-    rows += kb_nav(back_cb, depth=depth, is_adm=True)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
- 
-def kb_cta(depth=1):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="💳 ЗАПИСАТЬСЯ ПЛАТНО",           callback_data="book_paid")],
-    ] + kb_nav("main", depth=depth))
- 
-def kb_platform(back_cb="main", depth=2):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{W}🎥 ZOOM{W}",            callback_data="plat_Zoom")],
-        [InlineKeyboardButton(text=f"{W}📱 ВКОНТАКТЕ{W}",       callback_data="plat_ВКонтакте")],
-        [InlineKeyboardButton(text=f"{W}💻 ЯНДЕКС ТЕЛЕМОСТ{W}", callback_data="plat_Яндекс Телемост")],
-        [InlineKeyboardButton(text=f"{W}📹 GOOGLE MEET{W}",     callback_data="plat_Google Meet")],
-        [InlineKeyboardButton(text=f"{W}🖥 TEAMS{W}",           callback_data="plat_Teams")],
-        [InlineKeyboardButton(text=f"{W}📲 MAX{W}",             callback_data="plat_MAX")],
-    ] + kb_nav(back_cb, depth=depth))
- 
-def kb_duration(depth=3):
-    rows = [[InlineKeyboardButton(text=f"{W}{d}{W}", callback_data=f"dur_{d}")] for d in DURATIONS]
-    rows += kb_nav("book_paid", depth=depth)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
- 
-def kb_banks(uid, ds, tm):
-    rows = [[InlineKeyboardButton(text=b, callback_data=f"bank_{b}_{uid}_{ds}_{tm}")] for b in BANKS]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
- 
 def kb_admin():
+    """Меню админа - сразу показывает календарь + кнопки управления"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 КАЛЕНДАРЬ",               callback_data="adm_cal")],
         [InlineKeyboardButton(text="🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ", callback_data="adm_unconf")],
         [InlineKeyboardButton(text="📋 ВСЕ ЗАПИСИ",              callback_data="adm_list")],
         [InlineKeyboardButton(text="📈 АНАЛИТИКА",               callback_data="adm_analytics")],
@@ -514,10 +480,8 @@ def kb_admin():
     ])
  
 def cal_user(year, month):
-    today = date.today()
-    cal   = calendar.monthcalendar(year, month)
-    bd    = db_get("blocked_dates", [])
-    rows  = []
+    today = date.today(); cal = calendar.monthcalendar(year, month)
+    bd    = db_get("blocked_dates",[]); rows = []
     rows.append([InlineKeyboardButton(text=f"📅 {MN_RU[month-1]} {year}", callback_data="noop")])
     rows.append([InlineKeyboardButton(text=d, callback_data="noop")
                  for d in ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]])
@@ -527,8 +491,7 @@ def cal_user(year, month):
             if day == 0:
                 row.append(InlineKeyboardButton(text=" ", callback_data="noop"))
             else:
-                d  = date(year, month, day)
-                ds = d.strftime("%Y-%m-%d")
+                d  = date(year, month, day); ds = d.strftime("%Y-%m-%d")
                 if d < today:
                     row.append(InlineKeyboardButton(text="·", callback_data="noop"))
                 elif ds in bd:
@@ -552,12 +515,8 @@ def cal_user(year, month):
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def cal_admin(year, month):
-    today = date.today()
-    cal   = calendar.monthcalendar(year, month)
-    appts = db_get("appts", {})
-    slots = db_get("slots", {})
-    bd    = db_get("blocked_dates", [])
-    rows  = []
+    today = date.today(); cal = calendar.monthcalendar(year, month)
+    appts = db_get("appts",{}); slots = db_get("slots",{}); bd = db_get("blocked_dates",[]); rows = []
     rows.append([InlineKeyboardButton(text=f"🔧 {MN_RU[month-1]} {year}", callback_data="noop")])
     rows.append([InlineKeyboardButton(text=d, callback_data="noop")
                  for d in ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]])
@@ -567,76 +526,75 @@ def cal_admin(year, month):
             if day == 0:
                 row.append(InlineKeyboardButton(text=" ", callback_data="noop"))
             else:
-                d  = date(year, month, day)
-                ds = d.strftime("%Y-%m-%d")
+                d  = date(year, month, day); ds = d.strftime("%Y-%m-%d")
                 if d < today:
                     row.append(InlineKeyboardButton(text="·", callback_data=f"aday_{ds}"))
                 else:
-                    da = appts.get(ds, [])
-                    is_bd = ds in bd
+                    da = appts.get(ds,[]); is_bd = ds in bd
                     hu = any(not r.get("confirmed") for r in da)
                     hc = any(r.get("confirmed") for r in da)
-                    if hu:    row.append(InlineKeyboardButton(text=f"🟡{day}", callback_data=f"aday_{ds}"))
-                    elif hc:  row.append(InlineKeyboardButton(text=f"🔵{day}", callback_data=f"aday_{ds}"))
-                    elif is_bd: row.append(InlineKeyboardButton(text=f"❌{day}", callback_data=f"aday_{ds}"))
+                    if hu:       row.append(InlineKeyboardButton(text=f"🟡{day}", callback_data=f"aday_{ds}"))
+                    elif hc:     row.append(InlineKeyboardButton(text=f"🔵{day}", callback_data=f"aday_{ds}"))
+                    elif is_bd:  row.append(InlineKeyboardButton(text=f"❌{day}", callback_data=f"aday_{ds}"))
                     elif slots.get(ds): row.append(InlineKeyboardButton(text=f"✅{day}", callback_data=f"aday_{ds}"))
-                    else: row.append(InlineKeyboardButton(text=str(day), callback_data=f"aday_{ds}"))
+                    else:        row.append(InlineKeyboardButton(text=str(day), callback_data=f"aday_{ds}"))
         rows.append(row)
     pm, py = (month-1, year) if month > 1 else (12, year-1)
     nm, ny = (month+1, year) if month < 12 else (1, year+1)
+    # Строка 1: навигация + записаться
     rows.append([
         InlineKeyboardButton(text="◀️", callback_data=f"acal_{py}_{pm}"),
-        InlineKeyboardButton(text="📅 ЗАПИСАТЬСЯ", callback_data="adm_book_menu"),
+        InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ", callback_data="adm_book_menu"),
         InlineKeyboardButton(text="▶️", callback_data=f"acal_{ny}_{nm}"),
     ])
+    # Строка 2: день открыть/закрыть
     rows.append([
         InlineKeyboardButton(text="✅ ДЕНЬ ОТКРЫТЬ",   callback_data="adm_open_day_btn"),
         InlineKeyboardButton(text="❌ ДЕНЬ ЗАКРЫТЬ",   callback_data="adm_close_day_btn"),
     ])
+    # Строка 3: неделю открыть/закрыть
     rows.append([
         InlineKeyboardButton(text="✅ НЕДЕЛЮ ОТКРЫТЬ", callback_data="adm_open_week_cal"),
         InlineKeyboardButton(text="❌ НЕДЕЛЮ ЗАКРЫТЬ", callback_data="adm_block_week_cal"),
+    ])
+    # Строка 4: месяц открыть/закрыть
+    rows.append([
+        InlineKeyboardButton(text="✅ МЕСЯЦ ОТКРЫТЬ",  callback_data="adm_open_month"),
         InlineKeyboardButton(text="❌ МЕСЯЦ ЗАКРЫТЬ",  callback_data="adm_block_month"),
     ])
+    # Назад в меню админа
     rows.append([InlineKeyboardButton(text="↩️ НАЗАД", callback_data="adm_back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_month_picker(action="close"):
-    """Выбор месяца — год сверху, 3 месяца в строке"""
-    today = date.today()
-    rows  = []
+    today = date.today(); rows = []
     for y in [today.year, today.year + 1]:
         rows.append([InlineKeyboardButton(text=str(y), callback_data="noop")])
         for start in range(0, 12, 3):
             row = []
-            for m in range(start, start + 3):
-                if date(y, m+1, 1) < today.replace(day=1): 
+            for m in range(start, start+3):
+                if date(y, m+1, 1) < today.replace(day=1):
                     row.append(InlineKeyboardButton(text=" ", callback_data="noop"))
                 else:
                     row.append(InlineKeyboardButton(
                         text=MN_SHORT[m],
                         callback_data=f"month_pick_{action}_{y}_{m+1:02d}"))
             rows.append(row)
-    rows.append([InlineKeyboardButton(text="↩️ НАЗАД", callback_data="adm_cal")])
+    rows += nav_admin("adm_cal", depth=1)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_day_admin(ds):
-    slots  = db_get("slots", {})
-    cs     = db_get("closed_slots", {})
-    appts  = db_get("appts", {})
-    bd     = db_get("blocked_dates", [])
-    today  = date.today()
-    is_past = datetime.strptime(ds, "%Y-%m-%d").date() < today
+    slots  = db_get("slots",{}); cs = db_get("closed_slots",{})
+    appts  = db_get("appts",{}); bd = db_get("blocked_dates",[])
+    today  = date.today(); is_past = datetime.strptime(ds,"%Y-%m-%d").date() < today
     is_bd  = ds in bd
-    open_s = slots.get(ds, [])
-    closed_d = cs.get(ds, [])
+    open_s = slots.get(ds,[]); closed_d = cs.get(ds,[])
     all_d  = ALL_SLOTS if is_bd else sorted(set(open_s + closed_d))
-    taken  = {r["time"]: r for r in appts.get(ds, [])}
+    taken  = {r["time"]:r for r in appts.get(ds,[])}
     rows = []; row = []
     for t in all_d:
         if t in taken:
-            em = "🔵" if taken[t].get("confirmed") else "🟡"
-            cb = f"aslot_{ds}_{t}"
+            em = "🔵" if taken[t].get("confirmed") else "🟡"; cb = f"aslot_{ds}_{t}"
         elif t in closed_d or is_bd:
             em = "🔴"; cb = f"aslot_blocked_{ds}_{t}"
         else:
@@ -644,29 +602,26 @@ def slots_day_admin(ds):
         row.append(InlineKeyboardButton(text=f"{em}{t}", callback_data=cb))
         if len(row) == 3: rows.append(row); row = []
     if row: rows.append(row)
-    if is_past:
-        rows.append([InlineKeyboardButton(text="➕ ДОБАВИТЬ СЕССИЮ",
-                                          callback_data=f"adm_add_session_{ds}")])
-    else:
+    if not is_past:
         rows.append([
             InlineKeyboardButton(text="✅ ОТКРЫТЬ ДЕНЬ", callback_data=f"adm_full_open_{ds}"),
             InlineKeyboardButton(text="❌ ЗАКРЫТЬ ДЕНЬ", callback_data=f"adm_full_close_{ds}"),
         ])
         rows.append([
             InlineKeyboardButton(text="➕ ДОБАВИТЬ СЛОТЫ", callback_data=f"adm_add_slots_{ds}"),
-            InlineKeyboardButton(text="✏️ ЗАПИСАТЬ",        callback_data=f"adm_book_slot_{ds}"),
+            InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬ",     callback_data=f"adm_book_slot_{ds}"),
         ])
-    rows.append([InlineKeyboardButton(text="↩️ НАЗАД", callback_data="adm_cal")])
+    else:
+        rows.append([InlineKeyboardButton(text="➕ ДОБАВИТЬ СЕССИЮ",
+                                          callback_data=f"adm_add_session_{ds}")])
+    rows += nav_admin("adm_cal", depth=1)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_menu_user(ds):
-    slots  = db_get("slots", {})
-    cs     = db_get("closed_slots", {})
-    appts  = db_get("appts", {})
-    taken  = [r["time"] for r in appts.get(ds, [])]
-    closed = cs.get(ds, [])
-    rows = []; row = []
-    for t in slots.get(ds, []):
+    slots  = db_get("slots",{}); cs = db_get("closed_slots",{})
+    appts  = db_get("appts",{}); taken = [r["time"] for r in appts.get(ds,[])]
+    closed = cs.get(ds,[]); rows = []; row = []
+    for t in slots.get(ds,[]):
         if t in closed: continue
         if t in taken:
             row.append(InlineKeyboardButton(text=f"🔴{t}", callback_data="slot_taken"))
@@ -674,44 +629,75 @@ def slots_menu_user(ds):
             row.append(InlineKeyboardButton(text=f"🟢{t}", callback_data=f"uslot_{ds}_{t}"))
         if len(row) == 4: rows.append(row); row = []
     if row: rows.append(row)
-    rows.append([InlineKeyboardButton(text="🏠 ГЛАВНОЕ МЕНЮ", callback_data="main")])
+    rows += nav_client("main", depth=1)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
-def get_clients_kb(step):
-    ud = db_get("all_users_data", {}); appts = db_get("appts", {})
+def kb_platform(back_cb="free", depth=3):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"{W}🎥 ZOOM{W}",            callback_data="plat_Zoom")],
+        [InlineKeyboardButton(text=f"{W}📱 ВКОНТАКТЕ{W}",       callback_data="plat_ВКонтакте")],
+        [InlineKeyboardButton(text=f"{W}💻 ЯНДЕКС ТЕЛЕМОСТ{W}", callback_data="plat_Яндекс Телемост")],
+        [InlineKeyboardButton(text=f"{W}📹 GOOGLE MEET{W}",     callback_data="plat_Google Meet")],
+        [InlineKeyboardButton(text=f"{W}🖥 TEAMS{W}",           callback_data="plat_Teams")],
+        [InlineKeyboardButton(text=f"{W}📲 MAX{W}",             callback_data="plat_MAX")],
+    ] + nav_client(back_cb, depth=depth))
+ 
+def kb_platform_adm(back_cb="adm_back", depth=2):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎥 ZOOM",            callback_data="plat_Zoom")],
+        [InlineKeyboardButton(text="📱 ВКОНТАКТЕ",       callback_data="plat_ВКонтакте")],
+        [InlineKeyboardButton(text="💻 ЯНДЕКС ТЕЛЕМОСТ", callback_data="plat_Яндекс Телемост")],
+        [InlineKeyboardButton(text="📹 GOOGLE MEET",     callback_data="plat_Google Meet")],
+        [InlineKeyboardButton(text="🖥 TEAMS",           callback_data="plat_Teams")],
+        [InlineKeyboardButton(text="📲 MAX",             callback_data="plat_MAX")],
+    ] + nav_admin(back_cb, depth=depth))
+ 
+def kb_duration(depth=3):
+    rows = [[InlineKeyboardButton(text=f"{W}{d}{W}", callback_data=f"dur_{d}")] for d in DURATIONS]
+    rows += nav_client("paid_info", depth=depth)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+ 
+def kb_banks(uid, ds, tm):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=b, callback_data=f"bank_{b}_{uid}_{ds}_{tm}")] for b in BANKS
+    ])
+ 
+def get_clients_kb(step, back_cb="adm_book_menu"):
+    ud = db_get("all_users_data",{}); appts = db_get("appts",{})
     seen = set(); users_data = []
     for info in ud.values():
-        u = info.get("username", ""); n = info.get("name", "")
+        u = info.get("username",""); n = info.get("name","")
         if u and u not in seen:
-            seen.add(u)
-            users_data.append({"name": n, "username": u, "uid": info.get("uid", 0)})
-    for ds, recs in appts.items():
+            seen.add(u); users_data.append({"name":n,"username":u,"uid":info.get("uid",0)})
+    for ds,recs in appts.items():
         for r in recs:
-            u = r.get("username", "")
+            u = r.get("username","")
             if u and u != "нет" and u not in seen:
-                seen.add(u)
-                users_data.append({"name": r.get("name","—"), "username": u, "uid": r.get("user_id",0)})
+                seen.add(u); users_data.append({"name":r.get("name","—"),"username":u,"uid":r.get("user_id",0)})
     rows = []
     for u in users_data[:20]:
         lbl = f"👤 {u['name']} @{u['username']}" if u['name'] else f"👤 @{u['username']}"
         rows.append([InlineKeyboardButton(text=lbl, callback_data=f"pick_client_{step}_{u['username']}")])
     rows.append([InlineKeyboardButton(text="🔍 НАЙТИ ПО ИМЕНИ", callback_data=f"search_client_{step}")])
     rows.append([InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ", callback_data=f"manual_client_{step}")])
-    rows.append([InlineKeyboardButton(text="↩️ НАЗАД", callback_data="adm_book_menu")])
+    rows += nav_admin(back_cb, depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def make_excel(d_from, d_to):
     if not EXCEL_OK: return None
     wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Записи"
-    hdr = ["Дата","Время","Тип","Статус","Имя","Username","Платформа","Длительность","Описание","Источник","Оплата"]
+    hdr = ["Дата","Время","Тип","Статус","Имя","Username","Платформа",
+           "Длительность","Описание","Источник записи","Источник трафика","Оплата"]
     hf = PatternFill("solid", fgColor="2E86AB")
-    for i, h in enumerate(hdr, 1):
+    for i,h in enumerate(hdr, 1):
         c = ws.cell(row=1, column=i, value=h); c.fill = hf
         c.font = Font(color="FFFFFF", bold=True); c.alignment = Alignment(horizontal="center")
-    appts = db_get("appts", {}); row = 2
+    appts = db_get("appts",{}); users_src = db_get("users_src",{}); row = 2
     for ds in sorted(appts.keys()):
         if ds < d_from or ds > d_to: continue
         for r in appts[ds]:
+            uid_str = str(r.get("user_id",""))
+            src_traffic = users_src.get(uid_str, "")
             ws.cell(row=row,column=1,value=fmt_date(ds))
             ws.cell(row=row,column=2,value=r.get("time",""))
             ws.cell(row=row,column=3,value="Платная" if r.get("type")=="paid" else "Бесплатная")
@@ -722,7 +708,8 @@ def make_excel(d_from, d_to):
             ws.cell(row=row,column=8,value=r.get("duration",""))
             ws.cell(row=row,column=9,value=r.get("desc",""))
             ws.cell(row=row,column=10,value=r.get("source","бот"))
-            ws.cell(row=row,column=11,value=r.get("bank","") if r.get("paid") else "не оплачено")
+            ws.cell(row=row,column=11,value=src_traffic)
+            ws.cell(row=row,column=12,value=r.get("bank","") if r.get("paid") else "не оплачено")
             row += 1
     for col in ws.columns:
         ml = max((len(str(c.value or "")) for c in col), default=0)
@@ -730,10 +717,10 @@ def make_excel(d_from, d_to):
     buf = io.BytesIO(); wb.save(buf); buf.seek(0); return buf
  
 def drip_add(uid):
-    q = db_get("drip", []); now = datetime.now()
+    q = db_get("drip",[]); now = datetime.now()
     for day in DRIP:
-        q.append({"uid": uid, "day": day, "at": (now+timedelta(days=day)).isoformat()})
-    db_set("drip", q)
+        q.append({"uid":uid,"day":day,"at":(now+timedelta(days=day)).isoformat()})
+    db_set("drip",q)
  
 # ═══════════════════════════════════════════════════
 # ФОНОВЫЕ ЗАДАЧИ
@@ -744,19 +731,17 @@ async def bg_loop():
         await asyncio.sleep(60)
         try:
             now   = datetime.now()
-            appts = db_get("appts", {})
+            appts = db_get("appts",{})
             for ds, recs in appts.items():
                 changed = False
                 for rec in recs:
-                    try: adt = datetime.strptime(f"{ds} {rec['time']}", "%Y-%m-%d %H:%M")
+                    try: adt = datetime.strptime(f"{ds} {rec['time']}","%Y-%m-%d %H:%M")
                     except: continue
                     diff  = (adt - now).total_seconds() / 60
-                    plat  = rec.get("platform", "")
-                    link  = PLATFORMS.get(plat, "")
-                    tl    = "💼 Платная" if rec.get("type") == "paid" else "🆓 Бесплатная"
+                    plat  = rec.get("platform",""); link = PLATFORMS.get(plat,"")
+                    tl    = "💼 Платная" if rec.get("type")=="paid" else "🆓 Бесплатная"
                     is_free = rec.get("type") != "paid"
  
-                    # Напоминание за 60 мин клиенту
                     if 59 <= diff <= 61 and not rec.get("rem_client") and rec.get("user_id"):
                         warn = (
                             "Если нужно отменить - напиши минимум за 24 часа. "
@@ -780,7 +765,6 @@ async def bg_loop():
                             rec["rem_client"] = True; changed = True
                         except: pass
  
-                    # Напоминание за 60 мин тебе
                     if 59 <= diff <= 61 and not rec.get("rem_admin"):
                         kb2 = InlineKeyboardMarkup(inline_keyboard=[
                             [InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ", callback_data=f"adm_ok_{rec.get('user_id',0)}_{ds}_{rec['time']}")],
@@ -796,7 +780,6 @@ async def bg_loop():
                             kb=kb2)
                         rec["rem_admin"] = True; changed = True
  
-                    # Повтор если клиент не подтвердил через 30 мин
                     if 29 <= diff <= 31 and rec.get("rem_client") and not rec.get("cli_confirmed") and rec.get("user_id"):
                         try:
                             kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -805,14 +788,11 @@ async def bg_loop():
                                 [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{rec['time']}")],
                             ])
                             await bot.send_message(rec["user_id"],
-                                "Ты ещё не подтвердил участие. Всё в силе? 😊",
-                                reply_markup=kb)
+                                "Ты ещё не подтвердил участие. Всё в силе? 😊", reply_markup=kb)
                         except: pass
  
-                    # Через 5 мин после окончания
-                    dm = {"30 мин":30,"1 час":60,"1.5 часа":90,"2 часа":120,"2.5 часа":150,"3 часа":180}
-                    dm2 = dm.get(rec.get("duration","30 мин"), 30)
-                    past = (now - (adt + timedelta(minutes=dm2+5))).total_seconds() / 60
+                    dm2 = {"30 мин":30,"1 час":60,"1.5 часа":90,"2 часа":120,"2.5 часа":150,"3 часа":180}.get(rec.get("duration","30 мин"),30)
+                    past = (now-(adt+timedelta(minutes=dm2+5))).total_seconds()/60
                     if 0 <= past <= 2 and not rec.get("session_asked"):
                         kb3 = InlineKeyboardMarkup(inline_keyboard=[
                             [InlineKeyboardButton(text="✅ ДА, БЕСПЛАТНАЯ",     callback_data=f"sess_yes_free_{ds}_{rec['time']}")],
@@ -828,10 +808,9 @@ async def bg_loop():
                         rec["session_asked"] = True; changed = True
  
                 if changed:
-                    a = db_get("appts", {}); a[ds] = recs; db_set("appts", a)
+                    a = db_get("appts",{}); a[ds] = recs; db_set("appts",a)
  
-            # Напоминание об обратной связи
-            pf = db_get("pending_feedback", {})
+            pf = db_get("pending_feedback",{})
             for key, item in list(pf.items()):
                 if item.get("sent"): continue
                 if now >= datetime.fromisoformat(item["remind_at"]):
@@ -844,11 +823,10 @@ async def bg_loop():
                             InlineKeyboardButton(text="📝 ОТПРАВИТЬ ОБРАТНУЮ СВЯЗЬ",
                                                  callback_data=f"send_fb_{key}")
                         ]]))
-                    item["remind_at"] = (now + timedelta(hours=24)).isoformat()
-            db_set("pending_feedback", pf)
+                    item["remind_at"] = (now+timedelta(hours=24)).isoformat()
+            db_set("pending_feedback",pf)
  
-            # Отправка T_FEEDBACK через 72 часа после обратной связи
-            ft = db_get("feedback_timer", {})
+            ft = db_get("feedback_timer",{})
             for key, item in list(ft.items()):
                 if item.get("sent"): continue
                 if now >= datetime.fromisoformat(item["send_at"]):
@@ -856,10 +834,9 @@ async def bg_loop():
                         await bot.send_message(item["uid"], T_FEEDBACK)
                         item["sent"] = True
                     except: pass
-            db_set("feedback_timer", ft)
+            db_set("feedback_timer",ft)
  
-            # Капельная воронка
-            drip = db_get("drip", []); left = []
+            drip = db_get("drip",[]); left = []
             for item in drip:
                 if now >= datetime.fromisoformat(item["at"]):
                     d = DRIP.get(item["day"])
@@ -868,8 +845,7 @@ async def bg_loop():
                             kb = None
                             if d["kb"] == "free":
                                 kb = InlineKeyboardMarkup(inline_keyboard=[[
-                                    InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО",
-                                                         callback_data="free")
+                                    InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")
                                 ]])
                             elif d["kb"] == "channel":
                                 kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -878,12 +854,10 @@ async def bg_loop():
                                 ]])
                             await bot.send_message(item["uid"], d["text"], reply_markup=kb)
                         except: pass
-                else:
-                    left.append(item)
-            db_set("drip", left)
+                else: left.append(item)
+            db_set("drip",left)
  
-        except Exception as e:
-            log.error(f"bg_loop: {e}")
+        except Exception as e: log.error(f"bg_loop: {e}")
  
 # ═══════════════════════════════════════════════════
 # СТАРТ И КЛИЕНТСКИЕ ХЭНДЛЕРЫ
@@ -897,8 +871,8 @@ async def cmd_handler(msg: types.Message):
     reg_user(uid, msg.from_user.username, msg.from_user.first_name)
     log_act(uid, msg.from_user.username, msg.text or "cmd")
     if is_admin(msg.from_user.username):
-        chats = db_get("admin_chats", [])
-        if uid not in chats: chats.append(uid); db_set("admin_chats", chats)
+        chats = db_get("admin_chats",[])
+        if uid not in chats: chats.append(uid); db_set("admin_chats",chats)
     cmd = (msg.text or "").split()[0]
     if cmd == "/stop":
         if is_admin(msg.from_user.username):
@@ -906,29 +880,32 @@ async def cmd_handler(msg: types.Message):
         return
     if cmd == "/admin":
         if is_admin(msg.from_user.username):
-            await msg.answer("🔐 *ПАНЕЛЬ АДМИНИСТРАТОРА*", parse_mode="Markdown", reply_markup=kb_admin())
+            today = date.today()
+            await msg.answer(
+                "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт",
+                parse_mode="Markdown", reply_markup=cal_admin(today.year, today.month))
         return
  
     # Deep link - фиксируем источник автоматически
     args = (msg.text or "").split()
     ref  = args[1] if len(args) > 1 else ""
     if ref in SRC_MAP:
-        us = db_get("users_src", {}); us[str(uid)] = SRC_MAP[ref]; db_set("users_src", us)
+        us = db_get("users_src",{}); us[str(uid)] = SRC_MAP[ref]; db_set("users_src",us)
         log_act(uid, msg.from_user.username, f"src:{ref}")
  
-    # Проверяем ожидающую запись (клиент пришёл по ссылке из соцсетей)
-    appts   = db_get("appts", {}); today_d = date.today(); pending = None
+    # Проверяем ожидающую запись
+    appts = db_get("appts",{}); today_d = date.today(); pending = None
     for ds, recs in appts.items():
-        try: d = datetime.strptime(ds, "%Y-%m-%d").date()
+        try: d = datetime.strptime(ds,"%Y-%m-%d").date()
         except: continue
         if d < today_d: continue
         for r in recs:
-            if r.get("username","").lower() == (msg.from_user.username or "").lower() and r.get("user_id",0) == 0:
-                r["user_id"] = uid; pending = (ds, r); break
+            if r.get("username","").lower()==(msg.from_user.username or "").lower() and r.get("user_id",0)==0:
+                r["user_id"] = uid; pending = (ds,r); break
         if pending: break
     if pending:
-        db_set("appts", appts); ds, r = pending
-        tl   = "💼 Платная" if r.get("type") == "paid" else "🆓 Бесплатная"
+        db_set("appts",appts); ds, r = pending
+        tl   = "💼 Платная" if r.get("type")=="paid" else "🆓 Бесплатная"
         plat = r.get("platform","—"); link = PLATFORMS.get(plat,""); dur = r.get("duration","—")
         ck = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{r['time']}")],
@@ -936,25 +913,23 @@ async def cmd_handler(msg: types.Message):
             [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",  callback_data="my_appts")],
         ])
         await msg.answer(
-            f"С возвращением, {msg.from_user.first_name}! 👋\n\n✅ Твоя запись уже создана:\n\n"
+            f"С возвращением! 👋\n\n✅ Твоя запись уже создана:\n\n"
             f"📅 {fmt_date(ds)} в {r['time']} МСК\n{tl} | ⏱ {dur}\n📱 {plat}\n"
             f"{'🔗 '+link if link else ''}\n\nЗа час до встречи придёт напоминание.",
             reply_markup=ck)
-        if r.get("type") == "paid":
-            price  = PRICES.get(dur, 5000)
-            pay_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 ОПЛАТА КАРТОЙ РФ / СБП",   callback_data=f"pay_ru_{uid}_{ds}_{r['time']}")],
-                [InlineKeyboardButton(text="💳 ОПЛАТА ЗАРУБЕЖНОЙ КАРТОЙ", callback_data=f"pay_intl_{uid}_{ds}_{r['time']}")],
-            ])
-            await msg.answer(f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:",
-                             parse_mode="Markdown", reply_markup=pay_kb)
         return
  
-    # Обычный старт
     is_adm = is_admin(msg.from_user.username)
-    await msg.answer(
-        "Хорошо что решил зайти. Это уже первый шаг.\n\nВыбери с чего начнём 👇",
-        reply_markup=kb_main(is_adm=is_adm))
+    if is_adm:
+        # Для админа показываем сразу календарь
+        today = date.today()
+        await msg.answer(
+            "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт",
+            parse_mode="Markdown", reply_markup=cal_admin(today.year, today.month))
+    else:
+        await msg.answer(
+            "Хорошо что решил зайти. Это уже первый шаг.\n\nВыбери с чего начнём 👇",
+            reply_markup=kb_main(is_adm=False))
  
 @dp.callback_query(F.data == "noop")
 async def noop(cb): await cb.answer()
@@ -969,15 +944,23 @@ async def go_main(cb: types.CallbackQuery):
     is_adm = is_admin(cb.from_user.username)
     await cb.message.answer("🏠 Главное меню:", reply_markup=kb_main(is_adm=is_adm))
  
+@dp.callback_query(F.data == "adm_back")
+async def adm_back(cb: types.CallbackQuery):
+    await cb.answer()
+    today = date.today()
+    await eoa(cb,
+        "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт",
+        kb=cal_admin(today.year, today.month))
+ 
 @dp.callback_query(F.data == "about")
 async def about(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔬 МОИ МЕТОДЫ",               callback_data="how_work")],
-        [InlineKeyboardButton(text="📋 КАК МЫ РАБОТАЕМ",          callback_data="contract")],
+        [InlineKeyboardButton(text="🔬 МОИ МЕТОДЫ",                callback_data="how_work")],
+        [InlineKeyboardButton(text="📋 КАК МЫ РАБОТАЕМ",           callback_data="contract")],
         [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="💳 ЗАПИСАТЬСЯ ПЛАТНО",         callback_data="book_paid")],
-    ] + kb_nav("main", depth=1))
+        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+    ] + nav_client("main", depth=1))
     await cb.message.answer(T_ABOUT, parse_mode="Markdown", reply_markup=kb)
  
 @dp.callback_query(F.data == "how_work")
@@ -986,8 +969,8 @@ async def how_work(cb: types.CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📋 КАК МЫ РАБОТАЕМ",           callback_data="contract")],
         [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="💳 ЗАПИСАТЬСЯ ПЛАТНО",          callback_data="book_paid")],
-    ] + kb_nav("about", depth=2))
+        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+    ] + nav_client("about", depth=2))
     await cb.message.answer(T_HOW, parse_mode="Markdown", reply_markup=kb)
  
 @dp.callback_query(F.data == "contract")
@@ -996,8 +979,8 @@ async def contract_cb(cb: types.CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔬 МОИ МЕТОДЫ",                callback_data="how_work")],
         [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="💳 ЗАПИСАТЬСЯ ПЛАТНО",          callback_data="book_paid")],
-    ] + kb_nav("about", depth=2))
+        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+    ] + nav_client("about", depth=2))
     await cb.message.answer(T_CONTRACT, parse_mode="Markdown", reply_markup=kb)
  
 @dp.callback_query(F.data == "faq")
@@ -1005,16 +988,16 @@ async def faq(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="💳 ПЛАТНАЯ КОНСУЛЬТАЦИЯ",        callback_data="paid_info")],
-    ] + kb_nav("main", depth=1))
+        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+    ] + nav_client("main", depth=1))
     await cb.message.answer(T_FAQ, parse_mode="Markdown", reply_markup=kb)
  
 @dp.callback_query(F.data == "paid_info")
 async def paid_info(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💰 ЗАПИСАТЬСЯ НА ПЛАТНУЮ", callback_data="book_paid")],
-    ] + kb_nav("main", depth=1))
+        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ", callback_data="book_paid")],
+    ] + nav_client("main", depth=1))
     await cb.message.answer(T_PRICE, parse_mode="Markdown", reply_markup=kb)
  
 @dp.callback_query(F.data == "guide")
@@ -1025,7 +1008,7 @@ async def guide(cb: types.CallbackQuery):
         [InlineKeyboardButton(text="📢 ПОДПИСАТЬСЯ НА КАНАЛ",
                               url=f"https://t.me/{CHANNEL.lstrip('@')}")],
         [InlineKeyboardButton(text="✅ Я ПОДПИСАЛСЯ - ДАВАЙ ГАЙД", callback_data="check_sub")],
-    ] + kb_nav("main", depth=1))
+    ] + nav_client("main", depth=1))
     await cb.message.answer(
         f"🎁 *ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»*\n\n"
         f"30 страниц практики.\n\n"
@@ -1039,13 +1022,14 @@ async def check_sub(cb: types.CallbackQuery):
     if await is_sub(uid):
         log_act(uid, cb.from_user.username, "got_guide")
         drip_add(uid)
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")
-        ]])
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
+        ])
         await cb.message.answer(
-            f"✅ Держи гайд!\n\n👉 {LEAD}\n\n"
-            "Никуда не торопись - открывай когда будешь готов. "
-            "Если захочется разобрать свою ситуацию лично - первая встреча бесплатно 👇",
+            f"✅ Держи гайд!\n\n"
+            f"Спокойно в своём темпе - открывай когда будешь готов.\n"
+            f"👉 {LEAD}\n\n"
+            f"Если захочется разобрать свою ситуацию лично - первая встреча бесплатно 👇",
             reply_markup=kb)
         await cb.answer()
     else:
@@ -1058,8 +1042,8 @@ async def free_consult(cb: types.CallbackQuery):
     uid = cb.from_user.id
     if get_free_used(uid):
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 ПЛАТНАЯ КОНСУЛЬТАЦИЯ", callback_data="paid_info")],
-        ] + kb_nav("main", depth=1))
+            [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ", callback_data="paid_info")],
+        ] + nav_client("main", depth=1))
         await cb.answer()
         await cb.message.answer(
             "Бесплатная встреча уже была использована или не состоялась по твоей инициативе.\n\n"
@@ -1067,19 +1051,19 @@ async def free_consult(cb: types.CallbackQuery):
             reply_markup=kb)
         return
     await cb.answer()
-    set_st(uid, {"type": "free"})
+    set_st(uid, {"type":"free"})
     log_act(uid, cb.from_user.username, "free_consult")
     await cb.message.answer(T_FREE1)
     await asyncio.sleep(0.3)
     today = date.today()
     await cb.message.answer(
-        T_FREE2.format(W=W),
+        T_FREE2 + W,
         reply_markup=cal_user(today.year, today.month))
  
 @dp.callback_query(F.data == "book_paid")
 async def book_paid(cb: types.CallbackQuery):
     await cb.answer()
-    set_st(cb.from_user.id, {"type": "paid"})
+    set_st(cb.from_user.id, {"type":"paid"})
     today = date.today()
     await cb.message.answer(
         f"Выбери удобную дату 👇\n✅ - есть свободные слоты{W}",
@@ -1088,74 +1072,74 @@ async def book_paid(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("ucal_"))
 async def ucal_nav(cb: types.CallbackQuery):
     _, y, m = cb.data.split("_")
-    try: await cb.message.edit_reply_markup(reply_markup=cal_user(int(y), int(m)))
+    try: await cb.message.edit_reply_markup(reply_markup=cal_user(int(y),int(m)))
     except: pass
  
 @dp.callback_query(F.data.startswith("uday_"))
 async def uday_sel(cb: types.CallbackQuery):
-    ds  = cb.data[5:]; uid = cb.from_user.id; st = get_st(uid)
-    if st.get("type") != "reschedule" and has_booking(uid, ds):
+    ds = cb.data[5:]; uid = cb.from_user.id; st = get_st(uid)
+    if st.get("type") != "reschedule" and has_booking(uid,ds):
         await cb.answer("У тебя уже есть запись на этот день.", show_alert=True); return
-    st["date"] = ds; set_st(uid, st); await cb.answer()
+    st["date"] = ds; set_st(uid,st); await cb.answer()
     await cb.message.answer(
         f"📅 *{fmt_date(ds)}*\n\nВыбери время:\n🟢 свободно  🔴 занято{W}",
         parse_mode="Markdown", reply_markup=slots_menu_user(ds))
  
 @dp.callback_query(F.data.startswith("uslot_"))
 async def uslot_sel(cb: types.CallbackQuery):
-    parts   = cb.data.split("_"); ds, tm = parts[1], parts[2]
-    uid     = cb.from_user.id; st = get_st(uid); ctype = st.get("type","free")
+    parts = cb.data.split("_"); ds, tm = parts[1], parts[2]
+    uid   = cb.from_user.id; st = get_st(uid); ctype = st.get("type","free")
     await cb.answer()
     if ctype in ("free","reschedule"):
-        st.update({"step":"desc","date":ds,"time":tm,"duration":"30 мин"}); set_st(uid, st)
-        name = cb.from_user.first_name or "Клиент"
+        st.update({"step":"desc","date":ds,"time":tm,"duration":"30 мин"}); set_st(uid,st)
         await cb.message.answer(
-            f"Отлично, записал 👍\n\n"
-            f"Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
-            f"что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
-            f"Если не хочешь - просто пропусти, встретимся и разберёмся на месте.")
+            "Отлично, записал 👍\n\n"
+            "Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
+            "что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
+            "Если не хочешь - просто пропусти, встретимся и разберёмся на месте.")
     else:
-        st.update({"step":"duration","date":ds,"time":tm}); set_st(uid, st)
+        st.update({"step":"duration","date":ds,"time":tm}); set_st(uid,st)
         await cb.message.answer(f"Выбери длительность встречи:{W}", reply_markup=kb_duration(depth=3))
  
 @dp.callback_query(F.data.startswith("dur_"))
 async def dur_sel(cb: types.CallbackQuery):
     dur = cb.data[4:]; uid = cb.from_user.id; st = get_st(uid)
-    st["duration"] = dur; set_st(uid, st)
+    st["duration"] = dur; set_st(uid,st)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}1️⃣ ПЕРВАЯ ПЛАТНАЯ ВСТРЕЧА{W}",   callback_data="session_first")],
         [InlineKeyboardButton(text=f"{W}🔄 ПОВТОРНАЯ ПЛАТНАЯ ВСТРЕЧА{W}", callback_data="session_repeat")],
-    ] + kb_nav("book_paid", depth=3))
+    ] + nav_client("book_paid", depth=3))
     await cb.message.answer(f"Это первая или повторная платная встреча?{W}", reply_markup=kb)
  
 @dp.callback_query(F.data == "session_first")
 async def session_first(cb: types.CallbackQuery):
-    uid = cb.from_user.id; st = get_st(uid); st["step"] = "desc"; set_st(uid, st)
-    name = cb.from_user.first_name or "Клиент"; await cb.answer()
+    uid = cb.from_user.id; st = get_st(uid); st["step"] = "desc"; set_st(uid,st)
+    await cb.answer()
     await cb.message.answer(
-        f"Отлично, записал 👍\n\n"
-        f"Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
-        f"что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
-        f"Если не хочешь - просто пропусти, встретимся и разберёмся на месте.")
+        "Отлично, записал 👍\n\n"
+        "Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
+        "что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
+        "Если не хочешь - просто пропусти, встретимся и разберёмся на месте.")
  
 @dp.callback_query(F.data == "session_repeat")
 async def session_repeat(cb: types.CallbackQuery):
     uid = cb.from_user.id; st = get_st(uid)
     st["step"] = "platform"; st["desc"] = "Повторная встреча"
     st["name"] = cb.from_user.first_name or "Клиент"
-    set_st(uid, st); await cb.answer()
-    await cb.message.answer(f"Через что созвонимся? Выбери удобный вариант 👇{W}",
-                             reply_markup=kb_platform("book_paid", depth=3))
+    set_st(uid,st); await cb.answer()
+    await cb.message.answer(
+        f"Окей, разберёмся на месте. Теперь выбери платформу 👇{W}",
+        reply_markup=kb_platform("book_paid", depth=3))
  
 @dp.callback_query(F.data == "desc_extend")
 async def desc_extend(cb: types.CallbackQuery):
-    uid = cb.from_user.id; st = get_st(uid); st["step"] = "desc_retry"; set_st(uid, st)
+    uid = cb.from_user.id; st = get_st(uid); st["step"] = "desc_retry"; set_st(uid,st)
     await cb.answer()
     await cb.message.answer("Пожалуйста, расскажи подробнее:")
  
 @dp.callback_query(F.data == "desc_keep")
 async def desc_keep(cb: types.CallbackQuery):
-    uid = cb.from_user.id; st = get_st(uid); st["step"] = "platform"; set_st(uid, st)
+    uid = cb.from_user.id; st = get_st(uid); st["step"] = "platform"; set_st(uid,st)
     await cb.answer()
     await cb.message.answer(
         f"Окей, разберёмся на месте. Теперь выбери платформу 👇{W}",
@@ -1165,20 +1149,20 @@ async def desc_keep(cb: types.CallbackQuery):
 async def plat_sel(cb: types.CallbackQuery):
     plat = cb.data[5:]; uid = cb.from_user.id; st = get_st(uid)
     if st.get("step") == "adm_manual_plat":
-        st["platform"] = plat; st["step"] = "adm_manual_type"; set_st(uid, st); await cb.answer()
+        st["platform"] = plat; st["step"] = "adm_manual_type"; set_st(uid,st); await cb.answer()
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🆓 БЕСПЛАТНАЯ", callback_data="adm_mtype_free")],
             [InlineKeyboardButton(text="💼 ПЛАТНАЯ",    callback_data="adm_mtype_paid")],
-        ] + kb_nav("adm_back", depth=2, is_adm=True))
+        ] + nav_admin("adm_book_menu", depth=2))
         await eoa(cb, "Тип встречи?", kb=kb); return
-    st["platform"] = plat; st["step"] = "confirm"; set_st(uid, st)
+    st["platform"] = plat; st["step"] = "confirm"; set_st(uid,st)
     ds   = st.get("date","?"); tm = st.get("time","?"); dur = st.get("duration","30 мин")
     name = st.get("name", cb.from_user.first_name or "?")
     tl   = "💼 Платная" if st.get("type") == "paid" else "🆓 Бесплатная"
     ck   = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ{W}",  callback_data=f"confirm_{ds}_{tm}")],
         [InlineKeyboardButton(text=f"{W}✏️ ИЗМЕНИТЬ{W}",     callback_data="reschedule_full")],
-    ] + kb_nav("main", depth=3))
+    ] + nav_client("main", depth=3))
     await cb.message.answer(
         f"Проверь данные перед подтверждением:\n\n"
         f"📅 {fmt_date(ds)} в {tm} МСК\n"
@@ -1187,11 +1171,8 @@ async def plat_sel(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data == "reschedule_full")
 async def reschedule_full(cb: types.CallbackQuery):
-    """Изменить — сброс в начало выбора даты"""
-    uid = cb.from_user.id; st = get_st(uid)
-    ctype = st.get("type","free")
-    set_st(uid, {"type": ctype})
-    today = date.today(); await cb.answer()
+    uid   = cb.from_user.id; st = get_st(uid); ctype = st.get("type","free")
+    set_st(uid, {"type":ctype}); today = date.today(); await cb.answer()
     await cb.message.answer(
         f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month))
@@ -1250,7 +1231,7 @@ async def confirm_book(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data == "my_appts")
 async def my_appts(cb: types.CallbackQuery):
-    uid   = cb.from_user.id; appts = db_get("appts",{}); today = date.today(); rows = []
+    uid = cb.from_user.id; appts = db_get("appts",{}); today = date.today(); rows = []
     for ds in sorted(appts.keys()):
         try: d = datetime.strptime(ds,"%Y-%m-%d").date()
         except: continue
@@ -1261,11 +1242,11 @@ async def my_appts(cb: types.CallbackQuery):
             rows.append([InlineKeyboardButton(
                 text=f"📅 {fmt_date(ds)} {r['time']} {tl}",
                 callback_data=f"my_rec_{ds}_{r['time']}")])
-    if not rows:
+    rows += nav_client("main", depth=1)
+    if len(rows) == 1:
         await cb.message.answer("У тебя нет предстоящих записей.",
-                                 reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_nav("main",depth=1)))
+                                 reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     else:
-        rows += kb_nav("main", depth=1)
         await cb.message.answer("📅 *Твои записи:*", parse_mode="Markdown",
                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
  
@@ -1275,12 +1256,12 @@ async def my_rec(cb: types.CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ", callback_data="reschedule")],
         [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",  callback_data=f"cancel_{ds}_{tm}")],
-    ] + kb_nav("my_appts", depth=2))
+    ] + nav_client("my_appts", depth=2))
     await cb.message.answer(f"📅 {fmt_date(ds)} в {tm} МСК", reply_markup=kb)
  
 @dp.callback_query(F.data == "reschedule")
 async def reschedule(cb: types.CallbackQuery):
-    set_st(cb.from_user.id, {"type":"reschedule"}); today = date.today(); await cb.answer()
+    set_st(cb.from_user.id,{"type":"reschedule"}); today = date.today(); await cb.answer()
     await cb.message.answer(
         f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month))
@@ -1320,8 +1301,7 @@ async def cli_cancel(cb: types.CallbackQuery):
         db_set("appts",appts)
     _block_adj(ds,tm,dur,unblock=True); await cb.answer()
     is_adm = is_admin(cb.from_user.username)
-    await cb.message.answer("Запись отменена. Для новой записи нажми кнопку ниже:",
-                             reply_markup=kb_main(is_adm=is_adm))
+    await cb.message.answer("Запись отменена.", reply_markup=kb_main(is_adm=is_adm))
     await notify_adm(f"❌ Клиент отменил перед встречей\n📅 {fmt_date(ds)} в {tm}\n🆔 @{cb.from_user.username or 'нет'}")
  
 @dp.callback_query(F.data.startswith("cli_move_"))
@@ -1331,10 +1311,6 @@ async def cli_move(cb: types.CallbackQuery):
         f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month))
     await notify_adm(f"🔄 Клиент хочет перенести\n🆔 @{cb.from_user.username or 'нет'}")
- 
-# ═══════════════════════════════════════════════════
-# ОПЛАТА
-# ═══════════════════════════════════════════════════
  
 @dp.callback_query(F.data.startswith("pay_ru_"))
 async def pay_ru(cb: types.CallbackQuery):
@@ -1349,15 +1325,13 @@ async def pay_ru(cb: types.CallbackQuery):
 async def pay_ru_confirm(cb: types.CallbackQuery):
     parts = cb.data.split("_"); uid = int(parts[3]); ds = parts[4]; tm = parts[5]
     await cb.answer()
-    await cb.message.answer(
-        f"Выбери банк через который ты перевёл:{W}",
-        reply_markup=kb_banks(uid, ds, tm))
+    await cb.message.answer(f"Выбери банк через который ты перевёл:{W}",
+                             reply_markup=kb_banks(uid,ds,tm))
  
 @dp.callback_query(F.data.startswith("bank_"))
 async def bank_sel(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); bank = parts[1]; uid = int(parts[2]); ds = parts[3]; tm = parts[4]
-    appts = db_get("appts",{})
-    name = "—"; dur = "—"; price = 5000
+    parts = cb.data.split("_"); bank=parts[1]; uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    appts = db_get("appts",{}); name="—"; dur="—"; price=5000
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
             name=r.get("name","—"); dur=r.get("duration","—"); r["bank"]=bank
@@ -1369,29 +1343,26 @@ async def bank_sel(cb: types.CallbackQuery):
                              callback_data=f"adm_confirm_pay_{uid}_{ds}_{tm}")
     ]])
     await notify_adm(
-        f"💰 *Клиент оплатил!*\n\n"
-        f"👤 {name}\n🆔 @{cb.from_user.username or '—'}\n"
-        f"📅 {fmt_date(ds)} в {tm} МСК\n⏱ {dur}\n"
-        f"💳 Банк: {bank}\n💰 Сумма: {price:,} руб.", kb=kb)
+        f"💰 *Клиент оплатил!*\n\n👤 {name}\n🆔 @{cb.from_user.username or '—'}\n"
+        f"📅 {fmt_date(ds)} в {tm} МСК\n⏱ {dur}\n💳 Банк: {bank}\n💰 Сумма: {price:,} руб.", kb=kb)
  
 @dp.callback_query(F.data.startswith("adm_confirm_pay_"))
 async def adm_confirm_pay(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); uid = int(parts[3]); ds = parts[4]; tm = parts[5]
-    appts = db_get("appts",{}); plat = "—"; link = ""; name = "—"
+    parts = cb.data.split("_"); uid=int(parts[3]); ds=parts[4]; tm=parts[5]
+    appts = db_get("appts",{}); plat="—"; link=""; name="—"
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
             r["paid"]=True; plat=r.get("platform","—"); link=PLATFORMS.get(plat,""); name=r.get("name","—")
     db_set("appts",appts)
     try:
         ck = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cli_cancel_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",  callback_data="my_appts")],
+            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
         ])
         await bot.send_message(uid,
-            f"✅ Оплата подтверждена!\n\n"
-            f"📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
+            f"✅ Оплата подтверждена!\n\n📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
             f"{'🔗 '+link if link else ''}\n\nЗа час до встречи придёт напоминание.",
             reply_markup=ck)
     except: pass
@@ -1399,7 +1370,7 @@ async def adm_confirm_pay(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("pay_intl_"))
 async def pay_intl(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
+    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📋 ПОЛУЧИТЬ РЕКВИЗИТЫ", callback_data=f"intl_req_{uid}_{ds}_{tm}")],
         [InlineKeyboardButton(text="✅ ОПЛАТИЛ",            callback_data=f"intl_paid_{uid}_{ds}_{tm}")],
@@ -1409,21 +1380,21 @@ async def pay_intl(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("intl_req_"))
 async def intl_req(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
+    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
     await cb.answer("✅ Запрос отправлен Евгению")
     await cb.message.answer("✅ Евгений получил твой запрос и пришлёт реквизиты в ближайшее время.")
-    appts = db_get("appts",{}); name = "—"
+    appts = db_get("appts",{}); name="—"
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm: name=r.get("name","—"); break
     await notify_adm(
-        f"💳 *Запрос реквизитов зарубежной карты*\n\n"
-        f"👤 {name}\n🆔 @{cb.from_user.username or '—'} | ID: {uid}\n"
+        f"💳 *Запрос реквизитов зарубежной карты*\n\n👤 {name}\n"
+        f"🆔 @{cb.from_user.username or '—'} | ID: {uid}\n"
         f"📅 {fmt_date(ds)} в {tm} МСК\n\nОтправь реквизиты клиенту в личку.")
  
 @dp.callback_query(F.data.startswith("intl_paid_"))
 async def intl_paid(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
-    appts = db_get("appts",{}); name = "—"; dur = "—"; price = 5000
+    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    appts = db_get("appts",{}); name="—"; dur="—"; price=5000
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
             name=r.get("name","—"); dur=r.get("duration","—"); price=PRICES.get(dur,5000); break
@@ -1434,31 +1405,26 @@ async def intl_paid(cb: types.CallbackQuery):
                              callback_data=f"adm_confirm_pay_{uid}_{ds}_{tm}")
     ]])
     await notify_adm(
-        f"💰 *Клиент сообщил об оплате (зарубежная карта)*\n\n"
-        f"👤 {name}\n🆔 @{cb.from_user.username or '—'}\n"
+        f"💰 *Клиент сообщил об оплате (зарубежная карта)*\n\n👤 {name}\n"
+        f"🆔 @{cb.from_user.username or '—'}\n"
         f"📅 {fmt_date(ds)} в {tm} МСК\n⏱ {dur}\n💰 Сумма: {price:,} руб.", kb=kb)
- 
-# ═══════════════════════════════════════════════════
-# ЕВГЕНИЙ - ПОДТВЕРЖДЕНИЕ, РЕЗУЛЬТАТ СЕССИИ
-# ═══════════════════════════════════════════════════
  
 @dp.callback_query(F.data.startswith("adm_ok_"))
 async def adm_ok(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
-    appts = db_get("appts",{}); plat = "—"; link = ""
+    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    appts = db_get("appts",{}); plat="—"; link=""
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
             r["confirmed"]=True; plat=r.get("platform","—"); link=PLATFORMS.get(plat,"")
     db_set("appts",appts)
     try:
         ck = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cli_cancel_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",  callback_data="my_appts")],
+            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
         ])
         await bot.send_message(uid,
-            f"✅ Встреча подтверждена!\n\n"
-            f"📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
+            f"✅ Встреча подтверждена!\n\n📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
             f"{'🔗 '+link if link else ''}\n\n"
             "За час до встречи пришлю напоминание - там же попрошу подтвердить что всё в силе.",
             reply_markup=ck)
@@ -1474,197 +1440,184 @@ async def adm_ok(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("adm_cncl_"))
 async def adm_cncl(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
-    dur = "30 мин"; appts = db_get("appts",{})
+    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    dur="30 мин"; appts=db_get("appts",{})
     if ds in appts:
         for r in appts[ds]:
             if r["user_id"]==uid and r["time"]==tm: dur=r.get("duration","30 мин"); break
-        appts[ds] = [r for r in appts[ds] if not (r["user_id"]==uid and r["time"]==tm)]
+        appts[ds]=[r for r in appts[ds] if not (r["user_id"]==uid and r["time"]==tm)]
         db_set("appts",appts)
     _block_adj(ds,tm,dur,unblock=True)
     try:
-        await bot.send_message(uid,
-            "❌ К сожалению, это время не получится.\nДля новой записи нажми кнопку ниже:",
-            reply_markup=kb_main())
+        await bot.send_message(uid,"❌ К сожалению, это время не получится.\nДля новой записи нажми кнопку ниже:",
+                               reply_markup=kb_main())
     except: pass
     await cb.answer("❌ Запись отменена")
-    await eoa(cb, f"📅 *{fmt_date(ds)}* - запись отменена, слот освобождён 🟢",
-              kb=slots_day_admin(ds))
+    await eoa(cb, f"📅 *{fmt_date(ds)}* - запись отменена 🟢", kb=slots_day_admin(ds))
  
 @dp.callback_query(F.data.startswith("adm_mv_"))
 async def adm_mv(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
-    set_st(cb.from_user.id, {"step":"adm_move_new_date","move_uid":uid,"move_ds":ds,"move_tm":tm})
-    today = date.today(); await cb.answer()
-    await eoa(cb, "Выбери новую дату для переноса:", kb=cal_admin(today.year, today.month))
+    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    set_st(cb.from_user.id,{"step":"adm_move_new_date","move_uid":uid,"move_ds":ds,"move_tm":tm})
+    today=date.today(); await cb.answer()
+    await eoa(cb,"Выбери новую дату для переноса:",kb=cal_admin(today.year,today.month))
  
 @dp.callback_query(F.data.startswith("sess_"))
 async def sess_result(cb: types.CallbackQuery):
-    parts  = cb.data.split("_"); result = parts[1]; stype = parts[2]; ds = parts[3]; tm = parts[4]
-    appts  = db_get("appts",{})
-    rec    = next((r for r in appts.get(ds,[]) if r["time"]==tm), None)
-    name   = rec.get("name","—") if rec else "—"
-    uname  = rec.get("username","—") if rec else "—"
-    dur    = rec.get("duration","—") if rec else "—"
-    cli_uid = rec.get("user_id",0) if rec else 0
-    if result == "yes":
-        if rec: rec["status"] = "проведена"
+    parts=cb.data.split("_"); result=parts[1]; stype=parts[2]; ds=parts[3]; tm=parts[4]
+    appts=db_get("appts",{})
+    rec=next((r for r in appts.get(ds,[]) if r["time"]==tm),None)
+    name=rec.get("name","—") if rec else "—"
+    uname=rec.get("username","—") if rec else "—"
+    dur=rec.get("duration","—") if rec else "—"
+    cli_uid=rec.get("user_id",0) if rec else 0
+    if result=="yes":
+        if rec: rec["status"]="проведена"
         db_set("appts",appts)
-        if stype == "free":
-            key = f"{ds}_{tm}"; pf = db_get("pending_feedback",{})
-            pf[key] = {"uid":cli_uid,"ds":ds,"time":tm,"dur":dur,"name":name,"username":uname,
-                       "sent":False,"remind_at":(datetime.now()+timedelta(minutes=5)).isoformat()}
+        if stype=="free":
+            key=f"{ds}_{tm}"; pf=db_get("pending_feedback",{})
+            pf[key]={"uid":cli_uid,"ds":ds,"time":tm,"dur":dur,"name":name,"username":uname,
+                     "sent":False,"remind_at":(datetime.now()+timedelta(minutes=5)).isoformat()}
             db_set("pending_feedback",pf)
-            await eoa(cb, cb.message.text + "\n\n✅ Отмечено: проведена")
+            await eoa(cb,cb.message.text+"\n\n✅ Отмечено: проведена")
         else:
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📋 СКОПИРОВАТЬ (ПОСТОЯННЫЙ)",
-                                      callback_data=f"reg_copy_{ds}_{tm}")],
-                [InlineKeyboardButton(text="➕ НОВАЯ ЗАПИСЬ (ПОСТОЯННЫЙ)",
-                                      callback_data=f"reg_new_{ds}_{tm}")],
-            ] + kb_nav("adm_back", depth=1, is_adm=True))
+            kb=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 СКОПИРОВАТЬ (ПОСТОЯННЫЙ)",callback_data=f"reg_copy_{ds}_{tm}")],
+                [InlineKeyboardButton(text="➕ НОВАЯ ЗАПИСЬ (ПОСТОЯННЫЙ)",callback_data=f"reg_new_{ds}_{tm}")],
+            ]+nav_admin("adm_back",depth=1))
             await eoa(cb,
-                f"✅ Платная встреча записана.\n\n"
-                f"📅 {fmt_date(ds)} в {tm}\n💼 Платная | ⏱ {dur}\n"
-                f"👤 {name}\n🆔 @{uname}", kb=kb)
-    elif result == "noshow":
-        if rec: rec["status"] = "missed_no_show"
+                f"✅ Платная встреча записана.\n\n📅 {fmt_date(ds)} в {tm}\n💼 | ⏱ {dur}\n"
+                f"👤 {name}\n🆔 @{uname}",kb=kb)
+    elif result=="noshow":
+        if rec: rec["status"]="missed_no_show"
         db_set("appts",appts)
-        if cli_uid: set_free_used(cli_uid, True)
-        await eoa(cb, cb.message.text + "\n\n⏰ Отмечено: не пришёл. Следующая встреча - платная (30 мин / 3 000 руб.)")
+        if cli_uid: set_free_used(cli_uid,True)
+        await eoa(cb,cb.message.text+"\n\n⏰ Отмечено: не пришёл. Следующая встреча - платная (30 мин / 3 000 руб.)")
     else:
-        if rec: rec["status"] = "не состоялась"
+        if rec: rec["status"]="не состоялась"
         db_set("appts",appts)
-        sl = "Бесплатная" if stype=="free" else "Платная"
-        await eoa(cb, cb.message.text + f"\n\n❌ {sl} не состоялась.")
+        sl="Бесплатная" if stype=="free" else "Платная"
+        await eoa(cb,cb.message.text+f"\n\n❌ {sl} не состоялась.")
  
 @dp.callback_query(F.data.startswith("send_fb_"))
 async def send_fb(cb: types.CallbackQuery):
-    key = cb.data[8:]
-    set_st(cb.from_user.id, {"step":"adm_fb_text","fb_key":key}); await cb.answer()
-    await eoa(cb,
-        "Введи текст обратной связи и план работы.\n"
-        "Он уйдёт клиенту вместе с предложением продолжить:")
+    key=cb.data[8:]
+    set_st(cb.from_user.id,{"step":"adm_fb_text","fb_key":key}); await cb.answer()
+    await eoa(cb,"Введи текст обратной связи и план работы.\nОн уйдёт клиенту вместе с предложением продолжить:")
  
 @dp.callback_query(F.data.startswith("reg_copy_"))
 async def reg_copy(cb: types.CallbackQuery):
-    _, _, ds, tm = cb.data.split("_",3); appts = db_get("appts",{})
-    rec = next((r for r in appts.get(ds,[]) if r["time"]==tm), None)
-    if not rec: await cb.answer("Запись не найдена", show_alert=True); return
-    regs = db_get("regulars",[])
+    _,_,ds,tm=cb.data.split("_",3); appts=db_get("appts",{})
+    rec=next((r for r in appts.get(ds,[]) if r["time"]==tm),None)
+    if not rec: await cb.answer("Запись не найдена",show_alert=True); return
+    regs=db_get("regulars",[])
     regs.append({"username":rec.get("username",""),"name":rec.get("name",""),"day":"","time":tm,"source":"авто"})
     db_set("regulars",regs); await cb.answer("✅ Добавлен в постоянные клиенты")
  
 @dp.callback_query(F.data.startswith("reg_new_"))
 async def reg_new(cb: types.CallbackQuery):
-    _, _, ds, tm = cb.data.split("_",3); appts = db_get("appts",{})
-    rec  = next((r for r in appts.get(ds,[]) if r["time"]==tm), None)
-    tg   = rec.get("username","") if rec else ""
-    name = rec.get("name","") if rec else ""
-    set_st(cb.from_user.id, {"step":"adm_book_date","manual_tg":tg,"manual_name":name})
-    today = date.today(); await cb.answer()
-    await eoa(cb, f"Записываю @{tg}. Выбери дату следующей встречи:",
-              kb=cal_admin(today.year, today.month))
+    _,_,ds,tm=cb.data.split("_",3); appts=db_get("appts",{})
+    rec=next((r for r in appts.get(ds,[]) if r["time"]==tm),None)
+    tg=rec.get("username","") if rec else ""; name=rec.get("name","") if rec else ""
+    set_st(cb.from_user.id,{"step":"adm_book_date","manual_tg":tg,"manual_name":name})
+    today=date.today(); await cb.answer()
+    await eoa(cb,f"Записываю @{tg}. Выбери дату следующей встречи:",kb=cal_admin(today.year,today.month))
  
 # ═══════════════════════════════════════════════════
 # АДМИН - КАЛЕНДАРЬ
 # ═══════════════════════════════════════════════════
  
-@dp.callback_query(F.data == "adm_back")
-async def adm_back(cb: types.CallbackQuery):
-    await cb.answer()
-    await eoa(cb, "🔐 *ПАНЕЛЬ АДМИНИСТРАТОРА*", kb=kb_admin())
- 
-@dp.callback_query(F.data == "adm_cal")
-async def adm_cal(cb: types.CallbackQuery):
-    if not is_admin(cb.from_user.username): return
-    await cb.answer(); today = date.today()
-    await eoa(cb,
-        "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт  · прошедший",
-        kb=cal_admin(today.year, today.month))
- 
 @dp.callback_query(F.data.startswith("acal_"))
 async def acal_nav(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    _, y, m = cb.data.split("_")
+    _,y,m=cb.data.split("_")
     try: await cb.message.edit_reply_markup(reply_markup=cal_admin(int(y),int(m)))
     except: pass
  
 @dp.callback_query(F.data.startswith("aday_"))
 async def aday_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[5:]; uid = cb.from_user.id; st = get_st(uid); step = st.get("step","")
-    today   = date.today()
-    is_past = datetime.strptime(ds,"%Y-%m-%d").date() < today
-    bd      = db_get("blocked_dates",[])
+    ds=cb.data[5:]; uid=cb.from_user.id; st=get_st(uid); step=st.get("step","")
+    today=date.today(); is_past=datetime.strptime(ds,"%Y-%m-%d").date()<today
+    bd=db_get("blocked_dates",[])
  
-    if step == "adm_open_day_pick":
-        mode = st.get("mode","open")
-        if mode == "close":
+    if step=="adm_open_day_pick":
+        mode=st.get("mode","open")
+        if mode=="close":
             if ds not in bd: bd.append(ds); db_set("blocked_dates",bd)
-            slots = db_get("slots",{})
+            slots=db_get("slots",{})
             if ds in slots: del slots[ds]; db_set("slots",slots)
             clr_st(uid); await cb.answer(f"❌ {fmt_date(ds)} закрыт")
-            await eoa(cb, f"📅 *{fmt_date(ds)}* - день закрыт", kb=slots_day_admin(ds))
+            await eoa(cb,f"📅 *{fmt_date(ds)}* - день закрыт",kb=slots_day_admin(ds))
         else:
-            slots = db_get("slots",{}); slots[ds] = ALL_SLOTS.copy(); db_set("slots",slots)
+            slots=db_get("slots",{}); slots[ds]=ALL_SLOTS.copy(); db_set("slots",slots)
             if ds in bd: bd.remove(ds); db_set("blocked_dates",bd)
             clr_st(uid); await cb.answer(f"✅ {fmt_date(ds)} открыт")
-            await eoa(cb, f"✅ {fmt_date(ds)} открыт - {len(ALL_SLOTS)} слотов", kb=slots_day_admin(ds))
+            await eoa(cb,f"✅ {fmt_date(ds)} открыт - {len(ALL_SLOTS)} слотов",kb=slots_day_admin(ds))
         return
  
-    if step == "adm_week_pick":
-        start = datetime.strptime(ds,"%Y-%m-%d").date()
-        slots = db_get("slots",{}); bd2 = db_get("blocked_dates",[])
+    if step=="adm_week_pick":
+        start=datetime.strptime(ds,"%Y-%m-%d").date()
+        slots=db_get("slots",{}); bd2=db_get("blocked_dates",[])
         for i in range(7):
-            d2 = start+timedelta(days=i); ds2 = d2.strftime("%Y-%m-%d")
-            slots[ds2] = ALL_SLOTS.copy()
+            d2=start+timedelta(days=i); ds2=d2.strftime("%Y-%m-%d")
+            slots[ds2]=ALL_SLOTS.copy()
             if ds2 in bd2: bd2.remove(ds2)
         db_set("slots",slots); db_set("blocked_dates",bd2); clr_st(uid)
-        end_s = (start+timedelta(days=6)).strftime("%d.%m"); await cb.answer("✅ Неделя открыта")
-        await eoa(cb, f"✅ Неделя с {fmt_date(ds)} по {end_s} открыта.",
-                  kb=cal_admin(start.year, start.month))
-        return
+        end_s=(start+timedelta(days=6)).strftime("%d.%m"); await cb.answer("✅ Неделя открыта")
+        await eoa(cb,f"✅ Неделя с {fmt_date(ds)} по {end_s} открыта.",
+                  kb=cal_admin(start.year,start.month)); return
  
-    if step == "adm_block_week_pick":
-        start  = datetime.strptime(ds,"%Y-%m-%d").date()
-        appts  = db_get("appts",{})
-        conflicts = [(start+timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
-                     if appts.get((start+timedelta(days=i)).strftime("%Y-%m-%d"))]
+    if step=="adm_block_week_pick":
+        start=datetime.strptime(ds,"%Y-%m-%d").date(); appts=db_get("appts",{})
+        conflicts=[(start+timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
+                   if appts.get((start+timedelta(days=i)).strftime("%Y-%m-%d"))]
         if conflicts:
-            set_st(uid, {"step":"adm_block_week_confirm","block_week_start":ds})
-            ct = "\n".join(f"  {d}: {len(appts[d])} записей" for d in conflicts)
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ ЗАБЛОКИРОВАТЬ (ЗАПИСИ СОХРАНЯТСЯ)",
-                                      callback_data="adm_bw_yes")],
-            ] + kb_nav("adm_cal", depth=1, is_adm=True))
+            set_st(uid,{"step":"adm_block_week_confirm","block_week_start":ds})
+            ct="\n".join(f"  {d}: {len(appts[d])} записей" for d in conflicts)
+            kb=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ ЗАБЛОКИРОВАТЬ (ЗАПИСИ СОХРАНЯТСЯ)",callback_data="adm_bw_yes")],
+            ]+nav_admin("adm_cal",depth=1))
             await cb.answer()
-            await eoa(cb, f"⚠️ В этой неделе есть записи:\n{ct}\n\nВсё равно заблокировать?", kb=kb)
+            await eoa(cb,f"⚠️ В этой неделе есть записи:\n{ct}\n\nВсё равно заблокировать?",kb=kb)
         else:
-            bd2 = db_get("blocked_dates",[])
+            bd2=db_get("blocked_dates",[])
             for i in range(7):
-                ds2 = (start+timedelta(days=i)).strftime("%Y-%m-%d")
+                ds2=(start+timedelta(days=i)).strftime("%Y-%m-%d")
                 if ds2 not in bd2: bd2.append(ds2)
             db_set("blocked_dates",bd2); clr_st(uid)
-            end_s = (start+timedelta(days=6)).strftime("%d.%m"); await cb.answer("❌ Неделя закрыта")
-            await eoa(cb, f"❌ Неделя с {fmt_date(ds)} по {end_s} закрыта.",
-                      kb=cal_admin(start.year, start.month))
+            end_s=(start+timedelta(days=6)).strftime("%d.%m"); await cb.answer("❌ Неделя закрыта")
+            await eoa(cb,f"❌ Неделя с {fmt_date(ds)} по {end_s} закрыта.",
+                      kb=cal_admin(start.year,start.month))
         return
  
-    if step == "adm_move_new_date":
-        st["move_new_ds"] = ds; st["step"] = "adm_move_new_time"; set_st(uid,st); await cb.answer()
-        await eoa(cb, f"Новая дата: *{fmt_date(ds)}*\nВведи новое время (`14:00`):")
-        return
+    if step=="adm_move_new_date":
+        st["move_new_ds"]=ds; st["step"]="adm_move_new_time"; set_st(uid,st); await cb.answer()
+        await eoa(cb,f"Новая дата: *{fmt_date(ds)}*\nВведи новое время (`14:00`):"); return
  
     if step in ("adm_book_date","adm_reg_from_paid"):
-        st["book_ds"] = ds; st["step"] = "adm_book_slot_pick"; set_st(uid,st); await cb.answer()
-        await eoa(cb, f"📅 *{fmt_date(ds)}*\nВыбери слот для записи:", kb=slots_day_admin(ds))
+        st["book_ds"]=ds; st["step"]="adm_book_slot_pick"; set_st(uid,st); await cb.answer()
+        await eoa(cb,f"📅 *{fmt_date(ds)}*\nВыбери слот для записи:",kb=slots_day_admin(ds)); return
+ 
+    if step=="adm_excel_from":
+        st["excel_from"]=ds; st["step"]="adm_excel_to"; set_st(uid,st); await cb.answer()
+        await eoa(cb,f"Начало периода: {fmt_date(ds)}\nТеперь выбери дату *конца* периода:",
+                  kb=cal_admin(date.today().year,date.today().month)); return
+ 
+    if step=="adm_excel_to":
+        d_from=st.get("excel_from",""); d_to=ds; clr_st(uid); await cb.answer()
+        if not EXCEL_OK: await cb.message.answer("❌ openpyxl не установлен."); return
+        buf=make_excel(d_from,d_to)
+        if buf:
+            await cb.message.answer_document(
+                BufferedInputFile(buf.read(),filename=f"записи_{d_from}_{d_to}.xlsx"),
+                caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}")
+        else: await cb.message.answer("Записей за этот период нет.")
         return
  
     if is_past:
         await cb.answer()
-        await eoa(cb, f"📅 *{fmt_date(ds)}* (прошедший день)", kb=slots_day_admin(ds))
-        return
+        await eoa(cb,f"📅 *{fmt_date(ds)}* (прошедший день)",kb=slots_day_admin(ds)); return
  
     await cb.answer()
     await eoa(cb,
@@ -1674,372 +1627,376 @@ async def aday_open(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_full_open_"))
 async def adm_full_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[14:]
-    slots = db_get("slots",{}); slots[ds] = ALL_SLOTS.copy(); db_set("slots",slots)
-    bd = db_get("blocked_dates",[])
+    ds=cb.data[14:]
+    slots=db_get("slots",{}); slots[ds]=ALL_SLOTS.copy(); db_set("slots",slots)
+    bd=db_get("blocked_dates",[])
     if ds in bd: bd.remove(ds); db_set("blocked_dates",bd)
-    cs = db_get("closed_slots",{})
-    if ds in cs: cs[ds] = []; db_set("closed_slots",cs)
+    cs=db_get("closed_slots",{})
+    if ds in cs: cs[ds]=[]; db_set("closed_slots",cs)
     await cb.answer(f"✅ {fmt_date(ds)} полностью открыт")
-    await eoa(cb, f"✅ {fmt_date(ds)} полностью открыт - {len(ALL_SLOTS)} слотов",
-              kb=slots_day_admin(ds))
+    await eoa(cb,f"✅ {fmt_date(ds)} полностью открыт - {len(ALL_SLOTS)} слотов",kb=slots_day_admin(ds))
  
 @dp.callback_query(F.data.startswith("adm_full_close_"))
 async def adm_full_close(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[15:]
-    bd = db_get("blocked_dates",[])
+    ds=cb.data[15:]
+    bd=db_get("blocked_dates",[])
     if ds not in bd: bd.append(ds); db_set("blocked_dates",bd)
-    slots = db_get("slots",{})
+    slots=db_get("slots",{})
     if ds in slots: del slots[ds]; db_set("slots",slots)
     await cb.answer(f"❌ {fmt_date(ds)} полностью закрыт")
-    await eoa(cb, f"📅 *{fmt_date(ds)}* - день полностью закрыт", kb=slots_day_admin(ds))
+    await eoa(cb,f"📅 *{fmt_date(ds)}* - день полностью закрыт",kb=slots_day_admin(ds))
  
 @dp.callback_query(F.data.startswith("aslot_blocked_"))
 async def aslot_blocked_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); ds = parts[2]; tm = parts[3]
-    uid = cb.from_user.id; st = get_st(uid)
-    if st.get("manual_tg") and st.get("step") == "adm_book_slot_pick":
-        st["book_tm"] = tm; st["step"] = "adm_manual_plat"; set_st(uid,st); await cb.answer()
-        await eoa(cb, f"✅ @{st['manual_tg']} - {fmt_date(ds)} в {tm}\n\nПлатформа для связи?",
-                  kb=kb_platform("adm_back", depth=2))
-        return
-    kb = InlineKeyboardMarkup(inline_keyboard=[
+    parts=cb.data.split("_"); ds=parts[2]; tm=parts[3]
+    uid=cb.from_user.id; st=get_st(uid)
+    if st.get("manual_tg") and st.get("step")=="adm_book_slot_pick":
+        st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st); await cb.answer()
+        await eoa(cb,f"✅ @{st['manual_tg']} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
+                  kb=kb_platform_adm("adm_book_menu",depth=2)); return
+    kb=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🟢 ОТКРЫТЬ СЛОТ",     callback_data=f"adm_unblock_slot_{ds}_{tm}")],
-        [InlineKeyboardButton(text="✏️ ЗАПИСАТЬ КЛИЕНТА", callback_data=f"adm_book_blocked_{ds}_{tm}")],
-    ] + kb_nav(f"aday_{ds}", depth=1, is_adm=True))
+        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬ КЛИЕНТА",callback_data=f"adm_book_blocked_{ds}_{tm}")],
+    ]+nav_admin(f"aday_{ds}",depth=1))
     await cb.answer()
-    await eoa(cb, f"🔴 Слот {tm} на {fmt_date(ds)} - закрыт. Что сделать?", kb=kb)
+    await eoa(cb,f"🔴 Слот {tm} на {fmt_date(ds)} - закрыт. Что сделать?",kb=kb)
  
 @dp.callback_query(F.data.startswith("adm_unblock_slot_"))
 async def adm_unblock_slot(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
-    slots = db_get("slots",{}); cs = db_get("closed_slots",{}); bd = db_get("blocked_dates",[])
-    if ds not in slots: slots[ds] = []
-    if tm not in slots[ds]: slots[ds].append(tm); slots[ds] = sorted(slots[ds])
+    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    slots=db_get("slots",{}); cs=db_get("closed_slots",{}); bd=db_get("blocked_dates",[])
+    if ds not in slots: slots[ds]=[]
+    if tm not in slots[ds]: slots[ds].append(tm); slots[ds]=sorted(slots[ds])
     if ds in cs and tm in cs[ds]: cs[ds].remove(tm)
     if ds in bd: bd.remove(ds); db_set("blocked_dates",bd)
     db_set("slots",slots); db_set("closed_slots",cs)
     await cb.answer(f"🟢 Слот {tm} открыт")
-    await eoa(cb, f"📅 *{fmt_date(ds)}*\n🔴 закрыто  🟢 открыто", kb=slots_day_admin(ds))
+    await eoa(cb,f"📅 *{fmt_date(ds)}*",kb=slots_day_admin(ds))
  
 @dp.callback_query(F.data.startswith("aslot_"))
 async def aslot_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); ds = parts[1]; tm = parts[2]
-    uid   = cb.from_user.id; st = get_st(uid)
-    appts = db_get("appts",{}); slots = db_get("slots",{})
-    if st.get("step") == "adm_book_slot_pick":
-        st["book_tm"] = tm; st["step"] = "adm_manual_plat"; set_st(uid,st); await cb.answer()
-        tg = st.get("manual_tg","")
-        await eoa(cb, f"✅ @{tg} - {fmt_date(ds)} в {tm}\n\nПлатформа для связи?",
-                  kb=kb_platform("adm_back", depth=2))
-        return
-    rec = next((r for r in appts.get(ds,[]) if r["time"]==tm), None)
+    parts=cb.data.split("_"); ds=parts[1]; tm=parts[2]
+    uid=cb.from_user.id; st=get_st(uid); appts=db_get("appts",{})
+    if st.get("step")=="adm_book_slot_pick":
+        st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st); await cb.answer()
+        tg=st.get("manual_tg","")
+        await eoa(cb,f"✅ @{tg} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
+                  kb=kb_platform_adm("adm_book_menu",depth=2)); return
+    rec=next((r for r in appts.get(ds,[]) if r["time"]==tm),None)
     if rec:
-        tl   = "💼 Платная" if rec.get("type")=="paid" else "🆓 Бесплатная"
-        conf = "✅ подтверждена" if rec.get("confirmed") else "🟡 не подтверждена"
+        tl="💼 Платная" if rec.get("type")=="paid" else "🆓 Бесплатная"
+        conf="✅ подтверждена" if rec.get("confirmed") else "🟡 не подтверждена"
         await cb.answer()
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ",    callback_data=f"adm_ok_{rec['user_id']}_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ ЗАПИСЬ",callback_data=f"adm_cncl_{rec['user_id']}_{ds}_{tm}")],
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",      callback_data=f"adm_mv_{rec['user_id']}_{ds}_{tm}")],
-        ] + kb_nav(f"aday_{ds}", depth=1, is_adm=True))
+        kb=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ",     callback_data=f"adm_ok_{rec['user_id']}_{ds}_{tm}")],
+            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ ЗАПИСЬ", callback_data=f"adm_cncl_{rec['user_id']}_{ds}_{tm}")],
+            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",       callback_data=f"adm_mv_{rec['user_id']}_{ds}_{tm}")],
+        ]+nav_admin(f"aday_{ds}",depth=1))
         await eoa(cb,
-            f"🔵 {fmt_date(ds)} в {tm}\n\n"
-            f"👤 {rec['name']} @{rec.get('username','')}\n"
-            f"{tl} | ⏱ {rec.get('duration','—')}\n"
-            f"📱 {rec.get('platform','—')}\nСтатус: {conf}", kb=kb)
+            f"🔵 {fmt_date(ds)} в {tm}\n\n👤 {rec['name']} @{rec.get('username','')}\n"
+            f"{tl} | ⏱ {rec.get('duration','—')}\n📱 {rec.get('platform','—')}\nСтатус: {conf}",kb=kb)
     else:
-        in_s = tm in slots.get(ds,[]); cs = db_get("closed_slots",{}).get(ds,[])
-        kb = InlineKeyboardMarkup(inline_keyboard=[
+        in_s=tm in db_get("slots",{}).get(ds,[]); cs=db_get("closed_slots",{}).get(ds,[])
+        kb=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text="🔴 ЗАКРЫТЬ СЛОТ" if in_s else "🟢 ОТКРЫТЬ СЛОТ",
+                text="🔴 ЗАКРЫТЬ СЛОТ" if (in_s and tm not in cs) else "🟢 ОТКРЫТЬ СЛОТ",
                 callback_data=f"adm_toggle_slot_{ds}_{tm}")],
-            [InlineKeyboardButton(text="✏️ ЗАПИСАТЬ КЛИЕНТА", callback_data=f"adm_book_to_{ds}_{tm}")],
-        ] + kb_nav(f"aday_{ds}", depth=1, is_adm=True))
+            [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬ КЛИЕНТА",callback_data=f"adm_book_to_{ds}_{tm}")],
+        ]+nav_admin(f"aday_{ds}",depth=1))
         await cb.answer()
-        status = "🟢 Свободен" if in_s and tm not in cs else "🔴 Закрыт"
-        await eoa(cb, f"{status} - {fmt_date(ds)} в {tm}", kb=kb)
+        status="🟢 Свободен" if in_s and tm not in cs else "🔴 Закрыт"
+        await eoa(cb,f"{status} - {fmt_date(ds)} в {tm}",kb=kb)
  
 @dp.callback_query(F.data.startswith("adm_toggle_slot_"))
 async def adm_toggle_slot(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
-    slots = db_get("slots",{}); cs = db_get("closed_slots",{})
-    if ds not in slots: slots[ds] = []
-    if ds not in cs: cs[ds] = []
-    if tm in slots[ds]:
-        slots[ds].remove(tm)
+    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    slots=db_get("slots",{}); cs=db_get("closed_slots",{})
+    if ds not in slots: slots[ds]=[]
+    if ds not in cs: cs[ds]=[]
+    if tm in slots[ds] and tm not in cs[ds]:
         if tm not in cs[ds]: cs[ds].append(tm)
         await cb.answer(f"🔴 Слот {tm} закрыт")
     else:
-        slots[ds].append(tm); slots[ds] = sorted(slots[ds])
+        if tm not in slots[ds]: slots[ds].append(tm); slots[ds]=sorted(slots[ds])
         if tm in cs[ds]: cs[ds].remove(tm)
         await cb.answer(f"🟢 Слот {tm} открыт")
     db_set("slots",slots); db_set("closed_slots",cs)
-    await eoa(cb, f"📅 *{fmt_date(ds)}*", kb=slots_day_admin(ds))
+    await eoa(cb,f"📅 *{fmt_date(ds)}*",kb=slots_day_admin(ds))
  
 @dp.callback_query(F.data.startswith("adm_book_to_"))
 async def adm_book_to(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
-    uid = cb.from_user.id; st = get_st(uid)
+    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    uid=cb.from_user.id; st=get_st(uid)
     if st.get("manual_tg"):
-        st["book_ds"]=ds; st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st)
-        await cb.answer()
-        await eoa(cb, f"✅ @{st['manual_tg']} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
-                  kb=kb_platform("adm_back", depth=2))
+        st["book_ds"]=ds; st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st); await cb.answer()
+        await eoa(cb,f"✅ @{st['manual_tg']} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
+                  kb=kb_platform_adm("adm_book_menu",depth=2))
     else:
-        set_st(uid, {"step":"adm_manual_tg","book_ds":ds,"book_tm":tm}); await cb.answer()
-        await eoa(cb, "Введи username клиента в Telegram (без @):")
+        set_st(uid,{"step":"adm_manual_tg","book_ds":ds,"book_tm":tm}); await cb.answer()
+        await eoa(cb,"Введи username клиента в Telegram (без @):")
  
 @dp.callback_query(F.data.startswith("adm_book_blocked_"))
 async def adm_book_blocked(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); ds = parts[3]; tm = parts[4]
-    uid = cb.from_user.id; st = get_st(uid)
+    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    uid=cb.from_user.id; st=get_st(uid)
     if st.get("manual_tg"):
-        st["book_ds"]=ds; st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st)
-        await cb.answer()
-        await eoa(cb, f"✅ @{st['manual_tg']} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
-                  kb=kb_platform("adm_back", depth=2))
+        st["book_ds"]=ds; st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st); await cb.answer()
+        await eoa(cb,f"✅ @{st['manual_tg']} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
+                  kb=kb_platform_adm("adm_book_menu",depth=2))
     else:
-        set_st(uid, {"step":"adm_manual_tg","book_ds":ds,"book_tm":tm}); await cb.answer()
-        await eoa(cb, "Введи username клиента в Telegram (без @):")
+        set_st(uid,{"step":"adm_manual_tg","book_ds":ds,"book_tm":tm}); await cb.answer()
+        await eoa(cb,"Введи username клиента в Telegram (без @):")
  
 @dp.callback_query(F.data.startswith("adm_add_slots_"))
 async def adm_add_slots(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[14:]
-    set_st(cb.from_user.id, {"step":"adm_add_slots_to","adm_date":ds}); await cb.answer()
-    await eoa(cb, f"Слоты для *{fmt_date(ds)}* через запятую:\n`10:00, 11:00`")
+    ds=cb.data[14:]
+    set_st(cb.from_user.id,{"step":"adm_add_slots_to","adm_date":ds}); await cb.answer()
+    await eoa(cb,f"Слоты для *{fmt_date(ds)}* через запятую:\n`10:00, 11:00`")
  
 @dp.callback_query(F.data.startswith("adm_book_slot_"))
-async def adm_book_slot(cb: types.CallbackQuery):
+async def adm_book_slot_btn(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[14:]; uid = cb.from_user.id; st = get_st(uid)
+    ds=cb.data[14:]; uid=cb.from_user.id; st=get_st(uid)
     if st.get("manual_tg"):
         st["book_ds"]=ds; st["step"]="adm_book_slot_pick"; set_st(uid,st); await cb.answer()
-        await eoa(cb, f"📅 *{fmt_date(ds)}*\nВыбери слот:", kb=slots_day_admin(ds))
+        await eoa(cb,f"📅 *{fmt_date(ds)}*\nВыбери слот:",kb=slots_day_admin(ds))
     else:
-        set_st(uid, {"step":"adm_manual_tg","book_ds":ds}); await cb.answer()
-        await eoa(cb, "Введи username клиента в Telegram (без @):")
+        set_st(uid,{"step":"adm_manual_tg","book_ds":ds}); await cb.answer()
+        await eoa(cb,"Введи username клиента в Telegram (без @):")
  
 @dp.callback_query(F.data.startswith("adm_add_session_"))
 async def adm_add_session(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[16:]
-    set_st(cb.from_user.id, {"step":"adm_session_name","session_ds":ds}); await cb.answer()
-    await eoa(cb, f"Добавляю сессию за *{fmt_date(ds)}*.\nВведи имя клиента:")
+    ds=cb.data[16:]
+    set_st(cb.from_user.id,{"step":"adm_session_name","session_ds":ds}); await cb.answer()
+    await eoa(cb,f"Добавляю сессию за *{fmt_date(ds)}*.\nВведи имя клиента:")
  
-@dp.callback_query(F.data == "adm_open_day_btn")
+@dp.callback_query(F.data=="adm_open_day_btn")
 async def adm_open_day_btn(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    set_st(cb.from_user.id, {"step":"adm_open_day_pick","mode":"open"}); await cb.answer()
-    await eoa(cb, "Нажми на день для открытия:", kb=cal_admin(date.today().year, date.today().month))
+    set_st(cb.from_user.id,{"step":"adm_open_day_pick","mode":"open"}); await cb.answer()
+    await eoa(cb,"Нажми на день для открытия:",kb=cal_admin(date.today().year,date.today().month))
  
-@dp.callback_query(F.data == "adm_close_day_btn")
+@dp.callback_query(F.data=="adm_close_day_btn")
 async def adm_close_day_btn(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    set_st(cb.from_user.id, {"step":"adm_open_day_pick","mode":"close"}); await cb.answer()
-    await eoa(cb, "Нажми на день для закрытия:", kb=cal_admin(date.today().year, date.today().month))
+    set_st(cb.from_user.id,{"step":"adm_open_day_pick","mode":"close"}); await cb.answer()
+    await eoa(cb,"Нажми на день для закрытия:",kb=cal_admin(date.today().year,date.today().month))
  
 @dp.callback_query(F.data.in_({"adm_open_week","adm_open_week_cal"}))
 async def adm_open_week_pick(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    set_st(cb.from_user.id, {"step":"adm_week_pick"}); await cb.answer()
-    await eoa(cb, "Нажми на любой день - с него откроется неделя (7 дней):",
-              kb=cal_admin(date.today().year, date.today().month))
+    set_st(cb.from_user.id,{"step":"adm_week_pick"}); await cb.answer()
+    await eoa(cb,"Нажми на любой день - с него откроется неделя:",kb=cal_admin(date.today().year,date.today().month))
  
 @dp.callback_query(F.data.in_({"adm_block_week","adm_block_week_cal"}))
 async def adm_block_week_pick(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    set_st(cb.from_user.id, {"step":"adm_block_week_pick"}); await cb.answer()
-    await eoa(cb, "Нажми на любой день - с него закроется неделя (7 дней):",
-              kb=cal_admin(date.today().year, date.today().month))
+    set_st(cb.from_user.id,{"step":"adm_block_week_pick"}); await cb.answer()
+    await eoa(cb,"Нажми на любой день - с него закроется неделя:",kb=cal_admin(date.today().year,date.today().month))
  
-@dp.callback_query(F.data == "adm_block_month")
+@dp.callback_query(F.data=="adm_open_month")
+async def adm_open_month(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    await cb.answer()
+    await eoa(cb,"Выбери месяц для открытия:",kb=kb_month_picker("open"))
+ 
+@dp.callback_query(F.data=="adm_block_month")
 async def adm_block_month(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     await cb.answer()
-    await eoa(cb, "Выбери месяц для закрытия:", kb=kb_month_picker("close"))
+    await eoa(cb,"Выбери месяц для закрытия:",kb=kb_month_picker("close"))
  
 @dp.callback_query(F.data.startswith("month_pick_"))
 async def month_pick(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts  = cb.data.split("_"); action = parts[2]; y = int(parts[3]); m = int(parts[4])
-    ms     = f"{y}-{m:02d}"; dn = calendar.monthrange(y,m)[1]
-    appts  = db_get("appts",{})
-    conf   = [f"{y}-{m:02d}-{d:02d}" for d in range(1,dn+1) if appts.get(f"{y}-{m:02d}-{d:02d}")]
-    if conf:
-        set_st(cb.from_user.id, {"step":"adm_bm_confirm","block_month":ms})
-        ct = "\n".join(f"  {ds}: {len(appts[ds])} записей" for ds in conf)
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ ЗАКРЫТЬ (ЗАПИСИ СОХРАНЯТСЯ)",
-                                  callback_data="adm_bm_yes")],
-        ] + kb_nav("adm_cal", depth=1, is_adm=True))
-        await eoa(cb, f"⚠️ В {MN_RU[m-1]} {y} есть записи:\n{ct}\n\nВсё равно закрыть?", kb=kb)
-    else:
-        bd = db_get("blocked_dates",[])
+    parts=cb.data.split("_"); action=parts[2]; y=int(parts[3]); m=int(parts[4])
+    ms=f"{y}-{m:02d}"; dn=calendar.monthrange(y,m)[1]; appts=db_get("appts",{})
+    conf=[f"{y}-{m:02d}-{d:02d}" for d in range(1,dn+1) if appts.get(f"{y}-{m:02d}-{d:02d}")]
+    bd=db_get("blocked_dates",[]); slots=db_get("slots",{})
+    if action=="open":
         for d in range(1,dn+1):
-            ds = f"{y}-{m:02d}-{d:02d}"
-            if ds not in bd: bd.append(ds)
-        db_set("blocked_dates",bd); await cb.answer(f"❌ {MN_RU[m-1]} {y} закрыт")
-        await eoa(cb, f"❌ {MN_RU[m-1]} {y} закрыт.", kb=kb_admin())
+            ds=f"{y}-{m:02d}-{d:02d}"
+            if ds in bd: bd.remove(ds)
+            slots[ds]=ALL_SLOTS.copy()
+        db_set("blocked_dates",bd); db_set("slots",slots)
+        await cb.answer(f"✅ {MN_RU[m-1]} {y} открыт")
+        await eoa(cb,f"✅ {MN_RU[m-1]} {y} открыт.",kb=kb_admin())
+    else:
+        if conf:
+            set_st(cb.from_user.id,{"step":"adm_bm_confirm","block_month":ms})
+            ct="\n".join(f"  {ds}: {len(appts[ds])} записей" for ds in conf)
+            kb=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ ЗАКРЫТЬ (ЗАПИСИ СОХРАНЯТСЯ)",callback_data="adm_bm_yes")],
+            ]+nav_admin("adm_cal",depth=1))
+            await eoa(cb,f"⚠️ В {MN_RU[m-1]} {y} есть записи:\n{ct}\n\nВсё равно закрыть?",kb=kb)
+        else:
+            for d in range(1,dn+1):
+                ds=f"{y}-{m:02d}-{d:02d}"
+                if ds not in bd: bd.append(ds)
+            db_set("blocked_dates",bd); await cb.answer(f"❌ {MN_RU[m-1]} {y} закрыт")
+            await eoa(cb,f"❌ {MN_RU[m-1]} {y} закрыт.",kb=kb_admin())
  
-@dp.callback_query(F.data == "adm_bm_yes")
+@dp.callback_query(F.data=="adm_bm_yes")
 async def adm_bm_yes(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    uid = cb.from_user.id; st = get_st(uid); ms = st.get("block_month","")
+    uid=cb.from_user.id; st=get_st(uid); ms=st.get("block_month","")
     if not ms: return
-    y, m = int(ms.split("-")[0]), int(ms.split("-")[1]); dn = calendar.monthrange(y,m)[1]
-    bd = db_get("blocked_dates",[])
+    y,m=int(ms.split("-")[0]),int(ms.split("-")[1]); dn=calendar.monthrange(y,m)[1]
+    bd=db_get("blocked_dates",[])
     for d in range(1,dn+1):
-        ds = f"{y}-{m:02d}-{d:02d}"
+        ds=f"{y}-{m:02d}-{d:02d}"
         if ds not in bd: bd.append(ds)
     db_set("blocked_dates",bd); clr_st(uid)
-    await eoa(cb, f"❌ {MN_RU[m-1]} {y} закрыт (записи сохранены).", kb=kb_admin())
+    await eoa(cb,f"❌ {MN_RU[m-1]} {y} закрыт (записи сохранены).",kb=kb_admin())
  
-@dp.callback_query(F.data == "adm_bw_yes")
+@dp.callback_query(F.data=="adm_bw_yes")
 async def adm_bw_yes(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    uid = cb.from_user.id; st = get_st(uid); ds = st.get("block_week_start","")
+    uid=cb.from_user.id; st=get_st(uid); ds=st.get("block_week_start","")
     if not ds: return
-    start = datetime.strptime(ds,"%Y-%m-%d").date(); bd = db_get("blocked_dates",[])
+    start=datetime.strptime(ds,"%Y-%m-%d").date(); bd=db_get("blocked_dates",[])
     for i in range(7):
-        ds2 = (start+timedelta(days=i)).strftime("%Y-%m-%d")
+        ds2=(start+timedelta(days=i)).strftime("%Y-%m-%d")
         if ds2 not in bd: bd.append(ds2)
     db_set("blocked_dates",bd); clr_st(uid)
-    end_s = (start+timedelta(days=6)).strftime("%d.%m")
-    await eoa(cb,
-        f"❌ Неделя с {fmt_date(ds)} по {end_s} закрыта (записи сохранены).",
-        kb=cal_admin(start.year, start.month))
+    end_s=(start+timedelta(days=6)).strftime("%d.%m")
+    await eoa(cb,f"❌ Неделя с {fmt_date(ds)} по {end_s} закрыта (записи сохранены).",
+              kb=cal_admin(start.year,start.month))
  
 # ═══════════════════════════════════════════════════
-# АДМИН - МЕНЮ ЗАПИСИ И АНАЛИТИКА
+# АДМИН - МЕНЮ ЗАПИСИ
 # ═══════════════════════════════════════════════════
  
-@dp.callback_query(F.data == "adm_book_menu")
+@dp.callback_query(F.data=="adm_book_menu")
 async def adm_book_menu(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    kb = InlineKeyboardMarkup(inline_keyboard=[
+    kb=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✏️ НОВЫЙ - БЕСПЛАТНАЯ", callback_data="adm_book_new_free")],
         [InlineKeyboardButton(text="✏️ НОВЫЙ - ПЛАТНАЯ",    callback_data="adm_book_new_paid")],
         [InlineKeyboardButton(text="✏️ ПОСТОЯННЫЙ",         callback_data="adm_book_reg")],
-    ] + kb_nav("adm_cal", depth=1, is_adm=True))
-    await cb.answer(); await eoa(cb, "Выбери тип записи:", kb=kb)
+    ]+nav_admin("adm_back",depth=1))
+    await cb.answer(); await eoa(cb,"Выбери тип записи:",kb=kb)
  
-@dp.callback_query(F.data == "adm_book_new_free")
+@dp.callback_query(F.data=="adm_book_new_free")
 async def adm_book_new_free(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    # Спрашиваем источник
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=lbl, callback_data=f"adm_src_book_ig_free"
-            if code=="ig" else f"adm_src_book_{code}_free")] for lbl,code in SOURCES
-    ] + kb_nav("adm_book_menu", depth=2, is_adm=True))
     await cb.answer()
-    await eoa(cb, "Откуда клиент?", kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=lbl, callback_data=f"adm_src_book_{code}_free")]
+    await eoa(cb,"Откуда клиент?",kb=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=lbl,callback_data=f"adm_src_book_{code}_free")]
         for lbl,code in SOURCES
-    ] + kb_nav("adm_book_menu", depth=2, is_adm=True)))
+    ]+nav_admin("adm_book_menu",depth=2)))
  
-@dp.callback_query(F.data == "adm_book_new_paid")
+@dp.callback_query(F.data=="adm_book_new_paid")
 async def adm_book_new_paid(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     await cb.answer()
-    await eoa(cb, "Откуда клиент?", kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=lbl, callback_data=f"adm_src_book_{code}_paid")]
+    await eoa(cb,"Откуда клиент?",kb=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=lbl,callback_data=f"adm_src_book_{code}_paid")]
         for lbl,code in SOURCES
-    ] + kb_nav("adm_book_menu", depth=2, is_adm=True)))
+    ]+nav_admin("adm_book_menu",depth=2)))
  
 @dp.callback_query(F.data.startswith("adm_src_book_"))
 async def adm_src_book(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts  = cb.data.split("_"); code = parts[3]; forced = parts[4]
-    uid    = cb.from_user.id
-    set_st(uid, {"forced_type":forced,"source":code}); await cb.answer()
-    await eoa(cb, "Выбери клиента:", kb=get_clients_kb(forced))
+    parts=cb.data.split("_"); code=parts[3]; forced=parts[4]
+    uid=cb.from_user.id; set_st(uid,{"forced_type":forced,"source":code}); await cb.answer()
+    await eoa(cb,"Выбери клиента:",kb=get_clients_kb(forced,"adm_book_new_free" if forced=="free" else "adm_book_new_paid"))
  
-@dp.callback_query(F.data == "adm_book_reg")
+@dp.callback_query(F.data=="adm_book_reg")
 async def adm_book_reg(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    set_st(cb.from_user.id, {"forced_type":"paid"}); await cb.answer()
-    await eoa(cb, "Выбери клиента:", kb=get_clients_kb("reg"))
+    regs=db_get("regulars",[])
+    if not regs:
+        kb=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ",callback_data="manual_client_reg")],
+        ]+nav_admin("adm_book_menu",depth=2))
+        await cb.answer(); await eoa(cb,"Постоянных клиентов нет.",kb=kb); return
+    rows=[[InlineKeyboardButton(
+        text=f"👤 {r.get('name','')} @{r['username']}",
+        callback_data=f"adm_reg_pick_{r['username']}")] for r in regs[:20]]
+    rows+=[[InlineKeyboardButton(text="🔍 НАЙТИ ПО ИМЕНИ",callback_data="search_client_reg")]]
+    rows+=[[InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ",callback_data="manual_client_reg")]]
+    rows+=nav_admin("adm_book_menu",depth=2)
+    await cb.answer(); await eoa(cb,"Выбери постоянного клиента:",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data.startswith("pick_client_"))
 async def pick_client(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_",3); step = parts[2]; uname = parts[3]
-    uid   = cb.from_user.id
-    ud    = db_get("all_users_data",{})
-    client_uid  = 0; client_name = uname
+    parts=cb.data.split("_",3); step=parts[2]; uname=parts[3]
+    uid=cb.from_user.id; ud=db_get("all_users_data",{})
+    client_uid=0; client_name=uname
     for info in ud.values():
-        if info.get("username","").lower() == uname.lower():
-            client_uid = info.get("uid",0); client_name = info.get("name",uname); break
+        if info.get("username","").lower()==uname.lower():
+            client_uid=info.get("uid",0); client_name=info.get("name",uname); break
     if not client_uid:
-        for ds,recs in db_get("appts",{}).items():
+        for ds2,recs in db_get("appts",{}).items():
             for r in recs:
                 if r.get("username","").lower()==uname.lower():
                     client_uid=r.get("user_id",0); client_name=r.get("name",uname); break
             if client_uid: break
-    forced = "free" if step=="free" else "paid"
-    st = get_st(uid)
-    set_st(uid, {**st,"step":"adm_book_date","manual_tg":uname,
-                 "manual_name":client_name,"manual_uid":client_uid,"forced_type":forced})
-    today = date.today(); await cb.answer()
-    await eoa(cb, f"✅ Клиент: *{client_name}* @{uname}\nВыбери дату:",
-              kb=cal_admin(today.year, today.month))
+    forced="free" if step in("free","reg") else "paid"
+    st=get_st(uid)
+    set_st(uid,{**st,"step":"adm_book_date","manual_tg":uname,
+                "manual_name":client_name,"manual_uid":client_uid,"forced_type":forced})
+    today=date.today(); await cb.answer()
+    await eoa(cb,f"✅ Клиент: *{client_name}* @{uname}\nВыбери дату:",kb=cal_admin(today.year,today.month))
  
 @dp.callback_query(F.data.startswith("manual_client_"))
 async def manual_client(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    step   = cb.data[14:]; forced = "free" if step=="free" else "paid"
-    set_st(cb.from_user.id, {"step":"adm_manual_tg","forced_type":forced}); await cb.answer()
-    await eoa(cb, "Введи username клиента в Telegram (без @):")
+    step=cb.data[14:]; forced="free" if step=="free" else "paid"
+    set_st(cb.from_user.id,{"step":"adm_manual_tg","forced_type":forced}); await cb.answer()
+    await eoa(cb,"Введи username клиента в Telegram (без @):")
  
 @dp.callback_query(F.data.startswith("search_client_"))
 async def search_client(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    step   = cb.data[14:]; forced = "free" if step=="free" else "paid"
-    set_st(cb.from_user.id, {"step":"adm_search_client","forced_type":forced}); await cb.answer()
-    await eoa(cb, "Введи часть имени или username для поиска:")
+    step=cb.data[14:]; forced="free" if step=="free" else "paid"
+    set_st(cb.from_user.id,{"step":"adm_search_client","forced_type":forced}); await cb.answer()
+    await eoa(cb,"Введи часть имени или username для поиска:")
  
 @dp.callback_query(F.data.startswith("adm_reg_pick_"))
 async def adm_reg_pick(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    uname = cb.data[13:]; regs = db_get("regulars",[])
-    rec   = next((r for r in regs if r["username"]==uname), None)
-    if not rec: await cb.answer("Не найден", show_alert=True); return
-    set_st(cb.from_user.id, {"step":"adm_book_date","manual_tg":uname,
-                              "manual_name":rec.get("name",""),"forced_type":"paid"})
-    today = date.today(); await cb.answer()
-    await eoa(cb, f"Записываю @{uname}. Выбери дату:", kb=cal_admin(today.year, today.month))
+    uname=cb.data[13:]; regs=db_get("regulars",[])
+    rec=next((r for r in regs if r["username"]==uname),None)
+    if not rec: await cb.answer("Не найден",show_alert=True); return
+    set_st(cb.from_user.id,{"step":"adm_book_date","manual_tg":uname,
+                             "manual_name":rec.get("name",""),"forced_type":"paid"})
+    today=date.today(); await cb.answer()
+    await eoa(cb,f"Записываю @{uname}. Выбери дату:",kb=cal_admin(today.year,today.month))
  
 # ── АНАЛИТИКА ─────────────────────────────────────
  
-@dp.callback_query(F.data == "adm_analytics")
+@dp.callback_query(F.data=="adm_analytics")
 async def adm_analytics(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    kb = InlineKeyboardMarkup(inline_keyboard=[
+    kb=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 СТАТИСТИКА",          callback_data="adm_stats")],
         [InlineKeyboardButton(text="📊 EXCEL ОТЧЁТ",         callback_data="adm_excel")],
         [InlineKeyboardButton(text="📋 ПРОШЕДШИЕ БЕСПЛАТНЫЕ",callback_data="adm_past_free")],
         [InlineKeyboardButton(text="⭐️ ОТЗЫВЫ",              callback_data="adm_reviews")],
         [InlineKeyboardButton(text="🚫 ЗАБЛОКИРОВАННЫЕ",     callback_data="adm_blocked")],
         [InlineKeyboardButton(text="📊 ИСТОРИЯ / ЛОГИ",      callback_data="adm_logs")],
-    ] + kb_nav("adm_back", depth=1, is_adm=True))
-    await cb.answer(); await eoa(cb, "📈 *АНАЛИТИКА*", kb=kb)
+    ]+nav_admin("adm_back",depth=1))
+    await cb.answer(); await eoa(cb,"📈 *АНАЛИТИКА*",kb=kb)
  
-@dp.callback_query(F.data == "adm_stats")
+@dp.callback_query(F.data=="adm_stats")
 async def adm_stats(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    appts = db_get("appts",{}); logs = db_get("logs",[]); now = datetime.now()
+    appts=db_get("appts",{}); logs=db_get("logs",[]); now=datetime.now()
     total=fc=pc=done=miss=0; srcs={}
     for ds,recs in appts.items():
-        try: d = datetime.strptime(ds,"%Y-%m-%d")
+        try: d=datetime.strptime(ds,"%Y-%m-%d")
         except: continue
         if d.month==now.month and d.year==now.year:
             for r in recs:
@@ -2049,13 +2006,12 @@ async def adm_stats(cb: types.CallbackQuery):
                 if r.get("status")=="проведена": done+=1
                 if r.get("status")=="не состоялась": miss+=1
                 s=r.get("source","бот"); srcs[s]=srcs.get(s,0)+1
-    guides  = sum(1 for l in logs if l.get("a")=="got_guide")
-    users   = len(db_get("users",[]))
-    us      = db_get("users_src",{}); sl={}
+    guides=sum(1 for l in logs if l.get("a")=="got_guide"); users=len(db_get("users",[]))
+    us=db_get("users_src",{}); sl={}
     for v in us.values(): sl[v]=sl.get(v,0)+1
-    st_text = "\n".join(f"  {k}: {v}" for k,v in srcs.items()) or "  нет данных"
-    sl_text = "\n".join(f"  {k}: {v}" for k,v in sl.items()) or "  нет данных"
-    text = (
+    st_text="\n".join(f"  {k}: {v}" for k,v in srcs.items()) or "  нет данных"
+    sl_text="\n".join(f"  {k}: {v}" for k,v in sl.items()) or "  нет данных"
+    text=(
         f"📊 *СТАТИСТИКА {now.strftime('%B %Y')}:*\n\n"
         f"📅 Всего: {total}\n🆓 Бесплатных: {fc}\n💼 Платных: {pc}\n"
         f"✅ Проведено: {done}\n❌ Не состоялось: {miss}\n"
@@ -2063,46 +2019,42 @@ async def adm_stats(cb: types.CallbackQuery):
         f"*Источники записей:*\n{st_text}\n\n"
         f"*Откуда узнали:*\n{sl_text}"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_analytics", depth=2, is_adm=True))
-    await eoa(cb, text, kb=kb)
+    await eoa(cb,text,kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
  
-@dp.callback_query(F.data == "adm_excel")
+@dp.callback_query(F.data=="adm_excel")
 async def adm_excel(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 1 ДЕНЬ",    callback_data="excel_1d")],
-        [InlineKeyboardButton(text="📅 1 НЕДЕЛЯ",  callback_data="excel_1w")],
-        [InlineKeyboardButton(text="📅 1 МЕСЯЦ",   callback_data="excel_1m")],
-        [InlineKeyboardButton(text="📅 ПЕРИОД",    callback_data="excel_period")],
-    ] + kb_nav("adm_analytics", depth=2, is_adm=True))
-    await cb.answer(); await eoa(cb, "Выбери период для отчёта:", kb=kb)
+    kb=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📅 1 ДЕНЬ",   callback_data="excel_1d")],
+        [InlineKeyboardButton(text="📅 1 НЕДЕЛЯ", callback_data="excel_1w")],
+        [InlineKeyboardButton(text="📅 1 МЕСЯЦ",  callback_data="excel_1m")],
+        [InlineKeyboardButton(text="📅 ПЕРИОД",   callback_data="excel_period")],
+    ]+nav_admin("adm_analytics",depth=2))
+    await cb.answer(); await eoa(cb,"Выбери период для отчёта:",kb=kb)
  
 @dp.callback_query(F.data.in_({"excel_1d","excel_1w","excel_1m"}))
 async def excel_quick(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    today = date.today()
-    if cb.data == "excel_1d":
-        d_from = d_to = today.strftime("%Y-%m-%d")
-    elif cb.data == "excel_1w":
-        d_from = (today - timedelta(days=7)).strftime("%Y-%m-%d"); d_to = today.strftime("%Y-%m-%d")
-    else:
-        d_from = today.replace(day=1).strftime("%Y-%m-%d"); d_to = today.strftime("%Y-%m-%d")
+    today=date.today()
+    if cb.data=="excel_1d": d_from=d_to=today.strftime("%Y-%m-%d")
+    elif cb.data=="excel_1w": d_from=(today-timedelta(days=7)).strftime("%Y-%m-%d"); d_to=today.strftime("%Y-%m-%d")
+    else: d_from=today.replace(day=1).strftime("%Y-%m-%d"); d_to=today.strftime("%Y-%m-%d")
     await cb.answer()
     if not EXCEL_OK: await cb.message.answer("❌ openpyxl не установлен."); return
-    buf = make_excel(d_from, d_to)
+    buf=make_excel(d_from,d_to)
     if buf:
         await cb.message.answer_document(
-            BufferedInputFile(buf.read(), filename=f"записи_{d_from}_{d_to}.xlsx"),
+            BufferedInputFile(buf.read(),filename=f"записи_{d_from}_{d_to}.xlsx"),
             caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}")
     else: await cb.message.answer("Записей за этот период нет.")
  
-@dp.callback_query(F.data == "excel_period")
+@dp.callback_query(F.data=="excel_period")
 async def excel_period(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    set_st(cb.from_user.id, {"step":"adm_excel_from"}); await cb.answer()
-    await eoa(cb, "Выбери дату *начала* периода:", kb=cal_admin(date.today().year, date.today().month))
+    set_st(cb.from_user.id,{"step":"adm_excel_from"}); await cb.answer()
+    await eoa(cb,"Выбери дату *начала* периода:",kb=cal_admin(date.today().year,date.today().month))
  
-@dp.callback_query(F.data == "adm_past_free")
+@dp.callback_query(F.data=="adm_past_free")
 async def adm_past_free(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     appts=db_get("appts",{}); today=date.today(); week_ago=today-timedelta(days=7); rows=[]
@@ -2117,51 +2069,46 @@ async def adm_past_free(cb: types.CallbackQuery):
                 text=f"{ic} {fmt_date(ds)} {r['time']} - {r['name']}",
                 callback_data=f"aslot_{ds}_{r['time']}")])
     if not rows:
-        await eoa(cb, "Прошедших бесплатных за неделю нет.",
-                  kb=InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_analytics", depth=2, is_adm=True)))
-        return
-    rows += kb_nav("adm_analytics", depth=2, is_adm=True)
-    await eoa(cb, "📋 *ПРОШЕДШИЕ БЕСПЛАТНЫЕ (7 дней):*",
-              kb=InlineKeyboardMarkup(inline_keyboard=rows))
+        await eoa(cb,"Прошедших бесплатных за неделю нет.",
+                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2))); return
+    rows+=nav_admin("adm_analytics",depth=2)
+    await eoa(cb,"📋 *ПРОШЕДШИЕ БЕСПЛАТНЫЕ (7 дней):*",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
-@dp.callback_query(F.data == "adm_reviews")
+@dp.callback_query(F.data=="adm_reviews")
 async def adm_reviews(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    reviews = db_get("reviews",[])
-    if not reviews:
-        await eoa(cb, "Отзывов пока нет.",
-                  kb=InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_analytics", depth=2, is_adm=True)))
-        return
-    text = "⭐️ *ОТЗЫВЫ:*\n\n"
-    for r in reviews[-10:]: text += f"👤 {r.get('name','—')} | {'⭐️'*r.get('stars',5)}\n{r.get('text','')}\n\n"
-    await eoa(cb, text, kb=InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_analytics", depth=2, is_adm=True)))
+    reviews=db_get("reviews",[])
+    nav=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2))
+    if not reviews: await eoa(cb,"Отзывов пока нет.",kb=nav); return
+    text="⭐️ *ОТЗЫВЫ:*\n\n"
+    for r in reviews[-10:]: text+=f"👤 {r.get('name','—')} | {'⭐️'*r.get('stars',5)}\n{r.get('text','')}\n\n"
+    await eoa(cb,text,kb=nav)
  
-@dp.callback_query(F.data == "adm_blocked")
+@dp.callback_query(F.data=="adm_blocked")
 async def adm_blocked(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    bl = db_get("blocked",[])
-    nav_kb = InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_analytics", depth=2, is_adm=True))
-    if not bl:
-        await eoa(cb, "Заблокированных нет.", kb=nav_kb); return
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔓 РАЗБЛОКИРОВАТЬ", callback_data="adm_unblock_ask")]
-    ] + kb_nav("adm_analytics", depth=2, is_adm=True))
-    await eoa(cb, "🚫 *ЗАБЛОКИРОВАННЫЕ:*\n\n"+"\n".join(str(u) for u in bl), kb=kb)
+    bl=db_get("blocked",[])
+    nav=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2))
+    if not bl: await eoa(cb,"Заблокированных нет.",kb=nav); return
+    kb=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔓 РАЗБЛОКИРОВАТЬ",callback_data="adm_unblock_ask")]
+    ]+nav_admin("adm_analytics",depth=2))
+    await eoa(cb,"🚫 *ЗАБЛОКИРОВАННЫЕ:*\n\n"+"\n".join(str(u) for u in bl),kb=kb)
  
-@dp.callback_query(F.data == "adm_unblock_ask")
+@dp.callback_query(F.data=="adm_unblock_ask")
 async def adm_unblock_ask(cb):
     set_st(cb.from_user.id,{"step":"adm_unblock"}); await cb.answer()
     await eoa(cb,"Введи ID для разблокировки:")
  
-@dp.callback_query(F.data == "adm_logs")
+@dp.callback_query(F.data=="adm_logs")
 async def adm_logs(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    logs = db_get("logs",[]); text = "📊 *ПОСЛЕДНИЕ 20 ДЕЙСТВИЙ:*\n\n"
-    for e in logs[-20:]: text += f"🕐 {e['t']} @{e['u']}\n▶️ {e['a']}\n\n"
-    await eoa(cb, text if logs else "Логов нет.",
-              kb=InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_analytics", depth=2, is_adm=True)))
+    logs=db_get("logs",[]); text="📊 *ПОСЛЕДНИЕ 20 ДЕЙСТВИЙ:*\n\n"
+    for e in logs[-20:]: text+=f"🕐 {e['t']} @{e['u']}\n▶️ {e['a']}\n\n"
+    await eoa(cb,text if logs else "Логов нет.",
+              kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
  
-@dp.callback_query(F.data == "adm_unconf")
+@dp.callback_query(F.data=="adm_unconf")
 async def adm_unconf(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     appts=db_get("appts",{}); today=date.today(); rows=[]
@@ -2176,13 +2123,11 @@ async def adm_unconf(cb: types.CallbackQuery):
                     text=f"🟡 {fmt_date(ds)} {r['time']} {tl} - {r['name']}",
                     callback_data=f"aslot_{ds}_{r['time']}")])
     if not rows:
-        await eoa(cb, "Неподтверждённых нет.",
-                  kb=InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_back", depth=1, is_adm=True)))
-        return
-    rows += kb_nav("adm_back", depth=1, is_adm=True)
-    await eoa(cb, "🟡 *НЕПОДТВЕРЖДЁННЫЕ:*", kb=InlineKeyboardMarkup(inline_keyboard=rows))
+        await eoa(cb,"Неподтверждённых нет.",kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=1))); return
+    rows+=nav_admin("adm_back",depth=1)
+    await eoa(cb,"🟡 *НЕПОДТВЕРЖДЁННЫЕ:*",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
-@dp.callback_query(F.data == "adm_list")
+@dp.callback_query(F.data=="adm_list")
 async def adm_list(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     appts=db_get("appts",{}); today=date.today(); text="📋 *ПРЕДСТОЯЩИЕ ЗАПИСИ:*\n\n"; found=False
@@ -2192,29 +2137,28 @@ async def adm_list(cb: types.CallbackQuery):
         if d<today: continue
         for r in appts[ds]:
             tl="💼" if r.get("type")=="paid" else "🆓"; co="✅" if r.get("confirmed") else "🟡"
-            text += (f"{co}{tl} *{fmt_date(ds)}* {r['time']} ⏱{r.get('duration','—')}\n"
-                     f"👤 {r['name']} @{r.get('username','')}\n📱 {r.get('platform','—')}\n\n")
-            found=True
-    await eoa(cb, text if found else "📭 Записей нет.",
-              kb=InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_back", depth=1, is_adm=True)))
+            text+=(f"{co}{tl} *{fmt_date(ds)}* {r['time']} ⏱{r.get('duration','—')}\n"
+                   f"👤 {r['name']} @{r.get('username','')}\n📱 {r.get('platform','—')}\n\n"); found=True
+    await eoa(cb,text if found else "📭 Записей нет.",
+              kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=1)))
  
-@dp.callback_query(F.data == "adm_regulars")
+@dp.callback_query(F.data=="adm_regulars")
 async def adm_regulars(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     regs=db_get("regulars",[]); text="👥 *ПОСТОЯННЫЕ КЛИЕНТЫ:*\n\n"
     text+="\n".join(f"@{r['username']} - {r['name']} | {r.get('day','')} {r.get('time','')}" for r in regs) if regs else "Нет."
     kb=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ ДОБАВИТЬ",callback_data="adm_reg_add")],
-        [InlineKeyboardButton(text="🗑 УДАЛИТЬ", callback_data="adm_reg_del")],
-    ] + kb_nav("adm_back", depth=1, is_adm=True))
+        [InlineKeyboardButton(text="🗑 УДАЛИТЬ",  callback_data="adm_reg_del")],
+    ]+nav_admin("adm_back",depth=1))
     await eoa(cb,text,kb=kb)
  
-@dp.callback_query(F.data == "adm_reg_add")
+@dp.callback_query(F.data=="adm_reg_add")
 async def adm_reg_add(cb):
     set_st(cb.from_user.id,{"step":"adm_reg_username"}); await cb.answer()
     await eoa(cb,"Введи username клиента (без @):")
  
-@dp.callback_query(F.data == "adm_reg_del")
+@dp.callback_query(F.data=="adm_reg_del")
 async def adm_reg_del_btn(cb):
     set_st(cb.from_user.id,{"step":"adm_reg_del_name"}); await cb.answer()
     await eoa(cb,"Введи username для удаления (без @):")
@@ -2225,90 +2169,80 @@ async def regday(cb: types.CallbackQuery):
     st["reg_day"]=day; st["step"]="adm_reg_time"; set_st(uid,st); await cb.answer()
     await eoa(cb,f"День: *{day}*\nВведи время (`15:00`):")
  
-@dp.callback_query(F.data == "adm_broadcast")
+@dp.callback_query(F.data=="adm_broadcast")
 async def adm_broadcast(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     set_st(cb.from_user.id,{"step":"adm_broadcast_text"}); await cb.answer()
-    kb = InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_back", depth=1, is_adm=True))
-    await eoa(cb,"Введи текст рассылки:", kb=kb)
+    await eoa(cb,"Введи текст рассылки:",
+              kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=1)))
  
-@dp.callback_query(F.data == "adm_post")
+@dp.callback_query(F.data=="adm_post")
 async def adm_post(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     set_st(cb.from_user.id,{"step":"adm_post_link"}); await cb.answer()
     await eoa(cb,"Вставь ссылку на пост из канала:")
  
-@dp.callback_query(F.data == "adm_delete_client")
+@dp.callback_query(F.data=="adm_delete_client")
 async def adm_delete_client(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ud    = db_get("all_users_data",{})
-    regs  = db_get("regulars",[])
-    seen  = set(); rows = []
+    ud=db_get("all_users_data",{}); regs=db_get("regulars",[])
+    seen=set(); rows=[]
     for info in ud.values():
-        u = info.get("username",""); n = info.get("name","")
+        u=info.get("username",""); n=info.get("name","")
         if u and u not in seen:
             seen.add(u); rows.append([InlineKeyboardButton(
-                text=f"🗑 {n} @{u}" if n else f"🗑 @{u}",
-                callback_data=f"del_client_{u}")])
+                text=f"🗑 {n} @{u}" if n else f"🗑 @{u}",callback_data=f"del_client_{u}")])
     for r in regs:
-        u = r.get("username","")
+        u=r.get("username","")
         if u and u not in seen:
             seen.add(u); rows.append([InlineKeyboardButton(
-                text=f"🗑 {r.get('name','')} @{u}",
-                callback_data=f"del_client_{u}")])
+                text=f"🗑 {r.get('name','')} @{u}",callback_data=f"del_client_{u}")])
     if not rows:
         await eoa(cb,"Клиентов в базе нет.",
-                  kb=InlineKeyboardMarkup(inline_keyboard=kb_nav("adm_back",depth=1,is_adm=True)))
-        return
-    rows += kb_nav("adm_back", depth=1, is_adm=True)
-    await cb.answer(); await eoa(cb,"Выбери клиента для удаления:",
-                                  kb=InlineKeyboardMarkup(inline_keyboard=rows))
+                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=1))); return
+    rows+=nav_admin("adm_back",depth=1)
+    await cb.answer(); await eoa(cb,"Выбери клиента для удаления:",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data.startswith("del_client_"))
 async def del_client_confirm(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    uname = cb.data[11:]
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"✅ ДА, УДАЛИТЬ @{uname}",
-                              callback_data=f"del_client_yes_{uname}")],
-        [InlineKeyboardButton(text="❌ ОТМЕНА", callback_data="adm_delete_client")],
-    ])
-    await cb.answer(); await eoa(cb, f"Удалить @{uname} из всех баз?", kb=kb)
- 
-@dp.callback_query(F.data.startswith("del_client_yes_"))
-async def del_client_yes(cb: types.CallbackQuery):
-    if not is_admin(cb.from_user.username): return
-    uname = cb.data[15:]
-    # Удаляем из all_users_data
-    ud = db_get("all_users_data",{})
-    to_del = [k for k,v in ud.items() if v.get("username","").lower()==uname.lower()]
-    for k in to_del: del ud[k]
-    db_set("all_users_data",ud)
-    # Удаляем из regulars
-    regs = db_get("regulars",[])
-    db_set("regulars",[r for r in regs if r.get("username","").lower()!=uname.lower()])
-    # Удаляем из users_src
-    us = db_get("users_src",{})
-    to_del2 = [k for k,v in us.items() if v==uname]
-    for k in to_del2: del us[k]
-    db_set("users_src",us)
-    await cb.answer(f"✅ @{uname} удалён")
-    await eoa(cb, f"✅ Клиент @{uname} удалён из всех баз.", kb=kb_admin())
+    if cb.data.startswith("del_client_yes_"):
+        uname=cb.data[15:]
+        ud=db_get("all_users_data",{})
+        to_del=[k for k,v in ud.items() if v.get("username","").lower()==uname.lower()]
+        for k in to_del: del ud[k]
+        db_set("all_users_data",ud)
+        regs=db_get("regulars",[])
+        db_set("regulars",[r for r in regs if r.get("username","").lower()!=uname.lower()])
+        us=db_get("users_src",{})
+        to_del2=[k for k,v in us.items() if v==uname]
+        for k in to_del2: del us[k]
+        db_set("users_src",us)
+        await cb.answer(f"✅ @{uname} удалён")
+        today=date.today()
+        await eoa(cb,f"✅ Клиент @{uname} удалён из всех баз.",
+                  kb=cal_admin(today.year,today.month))
+    else:
+        uname=cb.data[11:]
+        kb=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"✅ ДА, УДАЛИТЬ @{uname}",callback_data=f"del_client_yes_{uname}")],
+            [InlineKeyboardButton(text="❌ ОТМЕНА",callback_data="adm_delete_client")],
+        ])
+        await cb.answer(); await eoa(cb,f"Удалить @{uname} из всех баз?",kb=kb)
  
 @dp.callback_query(F.data.startswith("adm_mtype_"))
 async def adm_mtype(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ctype  = "paid" if "paid" in cb.data else "free"
-    uid    = cb.from_user.id; st = get_st(uid)
-    ds     = st.get("book_ds","?"); tm = st.get("book_tm","?")
-    name   = st.get("manual_name","?"); tg = st.get("manual_tg","?")
-    plat   = st.get("platform","?"); dur = st.get("duration","—")
-    forced = st.get("forced_type")
-    if forced: ctype = forced
-    tl = "💼 Платная" if ctype=="paid" else "🆓 Бесплатная"
-    client_uid = st.get("manual_uid",0)
+    ctype="paid" if "paid" in cb.data else "free"
+    uid=cb.from_user.id; st=get_st(uid)
+    ds=st.get("book_ds","?"); tm=st.get("book_tm","?"); name=st.get("manual_name","?")
+    tg=st.get("manual_tg","?"); plat=st.get("platform","?"); dur=st.get("duration","—")
+    forced=st.get("forced_type")
+    if forced: ctype=forced
+    tl="💼 Платная" if ctype=="paid" else "🆓 Бесплатная"
+    client_uid=st.get("manual_uid",0)
     if not client_uid:
-        ud = db_get("all_users_data",{})
+        ud=db_get("all_users_data",{})
         for info in ud.values():
             if info.get("username","").lower()==tg.lower(): client_uid=info.get("uid",0); break
         if not client_uid:
@@ -2317,8 +2251,8 @@ async def adm_mtype(cb: types.CallbackQuery):
                     if r.get("username","").lower()==tg.lower() and r.get("user_id",0):
                         client_uid=r["user_id"]; break
                 if client_uid: break
-    appts = db_get("appts",{})
-    if ds not in appts: appts[ds] = []
+    appts=db_get("appts",{})
+    if ds not in appts: appts[ds]=[]
     appts[ds].append({
         "user_id":client_uid,"name":name,"time":tm,"username":tg,
         "type":ctype,"platform":plat,"duration":dur,"desc":"Ручная запись",
@@ -2327,22 +2261,21 @@ async def adm_mtype(cb: types.CallbackQuery):
         "cli_confirmed":False,"paid":False,"bank":"",
     })
     db_set("appts",appts); clr_st(uid)
-    await eoa(cb,
-        f"✅ Записан вручную!\n\n📅 {fmt_date(ds)} в {tm}\n{tl}\n👤 {name} @{tg}\n📱 {plat}",
-        kb=kb_admin())
+    today=date.today()
+    await eoa(cb,f"✅ Записан вручную!\n\n📅 {fmt_date(ds)} в {tm}\n{tl}\n👤 {name} @{tg}\n📱 {plat}",
+              kb=cal_admin(today.year,today.month))
     await notify_adm(f"✏️ *Ручная запись*\n📅 {fmt_date(ds)} в {tm}\n{tl}\n👤 {name} @{tg}")
     if client_uid:
-        link = PLATFORMS.get(plat,"")
-        ck = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cli_cancel_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",  callback_data="my_appts")],
+        link=PLATFORMS.get(plat,"")
+        ck=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
         ])
         try:
             await bot.send_message(client_uid,
                 f"✅ Встреча подтверждена!\n\n📅 {fmt_date(ds)} в {tm} МСК\n{tl} | ⏱ {dur}\n📱 {plat}\n"
-                f"{'🔗 '+link if link else ''}\n\nЗа час до встречи придёт напоминание.",
-                reply_markup=ck)
+                f"{'🔗 '+link if link else ''}\n\nЗа час до встречи придёт напоминание.",reply_markup=ck)
         except: pass
         if ctype=="paid" and dur!="—":
             price=PRICES.get(dur,5000)
@@ -2352,7 +2285,7 @@ async def adm_mtype(cb: types.CallbackQuery):
             ])
             try: await bot.send_message(client_uid,
                     f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:",
-                    parse_mode="Markdown", reply_markup=pay_kb)
+                    parse_mode="Markdown",reply_markup=pay_kb)
             except: pass
     else:
         try: me=await bot.get_me(); link2=f"https://t.me/{me.username}"
@@ -2364,10 +2297,10 @@ async def stype_cb(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     parts=cb.data.split("_"); uid=cb.from_user.id; st=get_st(uid)
     ds=st.get("session_ds","?"); name=st.get("session_name","?"); stype="_".join(parts[1:])
-    tm={"free_first":("🆓 Бесплатная первичная","free"),
-        "paid_first": ("💼 Платная первичная","paid"),
-        "paid_repeat":("💼 Платная повторная","paid")}
-    label,ctype=tm.get(stype,(stype,"paid"))
+    tm_map={"free_first":("🆓 Бесплатная первичная","free"),
+            "paid_first":("💼 Платная первичная","paid"),
+            "paid_repeat":("💼 Платная повторная","paid")}
+    label,ctype=tm_map.get(stype,(stype,"paid"))
     appts=db_get("appts",{})
     if ds not in appts: appts[ds]=[]
     appts[ds].append({"user_id":0,"name":name,"time":"00:00","username":"—","type":ctype,
@@ -2375,7 +2308,9 @@ async def stype_cb(cb: types.CallbackQuery):
                        "status":"проведена","confirmed":True,"rem_client":True,"rem_admin":True,
                        "session_asked":True,"cli_confirmed":True,"paid":False,"bank":""})
     db_set("appts",appts); clr_st(uid)
-    await eoa(cb,f"✅ Сессия добавлена.\n{fmt_date(ds)} | {label} | {name}",kb=kb_admin())
+    today=date.today()
+    await eoa(cb,f"✅ Сессия добавлена.\n{fmt_date(ds)} | {label} | {name}",
+              kb=cal_admin(today.year,today.month))
  
 @dp.callback_query(F.data.startswith("ban_"))
 async def ban_cb(cb: types.CallbackQuery):
@@ -2393,17 +2328,15 @@ async def skip_cb(cb: types.CallbackQuery):
  
 @dp.message()
 async def handle_text(msg: types.Message):
-    uid  = msg.from_user.id
-    text = msg.text.strip() if msg.text else ""
+    uid=msg.from_user.id; text=msg.text.strip() if msg.text else ""
     if is_blocked(uid): return
     if is_flood(uid): return
-    reg_user(uid, msg.from_user.username, msg.from_user.first_name)
+    reg_user(uid,msg.from_user.username,msg.from_user.first_name)
     if text.startswith("/"):
-        clr_st(uid)
-        is_adm = is_admin(msg.from_user.username)
-        await msg.answer("🏠 Главное меню:", reply_markup=kb_main(is_adm=is_adm)); return
+        clr_st(uid); is_adm=is_admin(msg.from_user.username)
+        await msg.answer("🏠 Главное меню:",reply_markup=kb_main(is_adm=is_adm)); return
     if is_admin(msg.from_user.username):
-        chats = db_get("admin_chats",[])
+        chats=db_get("admin_chats",[])
         if uid not in chats: chats.append(uid); db_set("admin_chats",chats)
     if has_bad(text):
         cnt=viol(uid,"bad"); await msg.answer("Пожалуйста, давайте общаться без грубостей 🙏")
@@ -2414,25 +2347,24 @@ async def handle_text(msg: types.Message):
         ])
         await notify_adm(f"⚠️ *Мат* ({cnt}/5)\n@{msg.from_user.username or '?'}(ID:{uid})\n{text[:200]}",kb=bk)
         return
-    st   = get_st(uid); step = st.get("step","")
+    st=get_st(uid); step=st.get("step","")
  
     if step in ("desc","desc_retry"):
-        name = msg.from_user.first_name or "Клиент"
-        if len(text) < 35:
-            st["desc"] = text; set_st(uid,st)
-            bk = InlineKeyboardMarkup(inline_keyboard=[
+        if len(text)<35:
+            st["desc"]=text; set_st(uid,st)
+            bk=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✏️ ДОПОЛНИТЬ",         callback_data="desc_extend")],
                 [InlineKeyboardButton(text="✅ ОСТАВИТЬ КАК ЕСТЬ", callback_data="desc_keep")],
             ])
             await msg.answer(
                 "Вижу, написал совсем немного. Если не хочешь писать - это абсолютно нормально. "
-                "Если случайно отправил - можешь дополнить.",
-                reply_markup=bk); return
+                "Если случайно отправил - можешь дополнить.",reply_markup=bk); return
+        name=msg.from_user.first_name or "Клиент"
         st["name"]=name; st["desc"]=text; st["step"]="platform"; set_st(uid,st)
         await msg.answer(f"Через что созвонимся? Выбери удобный вариант 👇{W}",
                          reply_markup=kb_platform("free",depth=3)); return
  
-    if step == "adm_fb_text":
+    if step=="adm_fb_text":
         key=st.get("fb_key",""); pf=db_get("pending_feedback",{}); item=pf.get(key,{})
         cli_uid=item.get("uid",0)
         if cli_uid:
@@ -2444,30 +2376,28 @@ async def handle_text(msg: types.Message):
                 await asyncio.sleep(0.5)
                 await bot.send_message(cli_uid,"Если захочешь продолжить работу - я здесь. Вот условия:",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                        InlineKeyboardButton(text="💳 ПЛАТНАЯ КОНСУЛЬТАЦИЯ",callback_data="paid_info")
+                        InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",callback_data="paid_info")
                     ]]))
-                # Ставим таймер на 72 часа для T_FEEDBACK
                 ft=db_get("feedback_timer",{})
-                ft[key]={"uid":cli_uid,"sent":False,
-                         "send_at":(datetime.now()+timedelta(hours=72)).isoformat()}
+                ft[key]={"uid":cli_uid,"sent":False,"send_at":(datetime.now()+timedelta(hours=72)).isoformat()}
                 db_set("feedback_timer",ft)
                 item["sent"]=True; pf[key]=item; db_set("pending_feedback",pf)
-                await msg.answer("✅ Отправлено клиенту.",reply_markup=kb_admin())
+                today=date.today()
+                await msg.answer("✅ Отправлено клиенту.",reply_markup=cal_admin(today.year,today.month))
             except Exception as e: await msg.answer(f"❌ Ошибка: {e}")
         clr_st(uid); return
  
-    if step == "adm_manual_tg":
+    if step=="adm_manual_tg":
         tg=text.lstrip("@"); st["manual_tg"]=tg
         if st.get("book_ds") and st.get("book_tm"):
             st["step"]="adm_manual_plat"; set_st(uid,st)
-            await msg.answer("Платформа для связи?",reply_markup=kb_platform("adm_back",depth=2))
+            await msg.answer("Платформа для связи?",reply_markup=kb_platform_adm("adm_book_menu",depth=2))
         else:
             st["step"]="adm_book_date"; set_st(uid,st); today=date.today()
-            await msg.answer(f"Записываю @{tg}. Выбери дату:",
-                             reply_markup=cal_admin(today.year,today.month))
+            await msg.answer(f"Записываю @{tg}. Выбери дату:",reply_markup=cal_admin(today.year,today.month))
         return
  
-    if step == "adm_move_new_time":
+    if step=="adm_move_new_time":
         if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$",text):
             await msg.answer("❌ Формат: `14:00`",parse_mode="Markdown"); return
         appts=db_get("appts",{}); old_ds=st["move_ds"]; new_ds=st["move_new_ds"]
@@ -2485,10 +2415,11 @@ async def handle_text(msg: types.Message):
                 except: pass
                 break
         if moved: db_set("appts",appts)
-        clr_st(uid); await msg.answer("✅ Перенесено." if moved else "❌ Не удалось.",
-                                       reply_markup=kb_admin()); return
+        clr_st(uid); today=date.today()
+        await msg.answer("✅ Перенесено." if moved else "❌ Не удалось.",
+                         reply_markup=cal_admin(today.year,today.month)); return
  
-    if step == "adm_session_name":
+    if step=="adm_session_name":
         st["session_name"]=text; st["step"]="adm_session_type"; set_st(uid,st)
         kb=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🆓 БЕСПЛАТНАЯ ПЕРВИЧНАЯ", callback_data="stype_free_first")],
@@ -2497,7 +2428,7 @@ async def handle_text(msg: types.Message):
         ])
         await msg.answer("Тип встречи?",reply_markup=kb); return
  
-    if step == "adm_add_slots_to":
+    if step=="adm_add_slots_to":
         times_raw=[t.strip() for t in text.split(",")]
         valid=[t for t in times_raw if re.match(r"^([01]\d|2[0-3]):[0-5]\d$",t)]
         if not valid: await msg.answer("❌ Формат: `10:00, 11:00`",parse_mode="Markdown"); return
@@ -2509,14 +2440,14 @@ async def handle_text(msg: types.Message):
         await msg.answer(f"✅ Добавлено на {fmt_date(ds)}: {', '.join(valid)}",
                          reply_markup=slots_day_admin(ds)); return
  
-    if step == "adm_search_client":
+    if step=="adm_search_client":
         query=text.lower(); forced=st.get("forced_type","paid")
         ud=db_get("all_users_data",{}); appts=db_get("appts",{}); found={}
         for info in ud.values():
             u=info.get("username",""); n=info.get("name","").lower()
             if (query in n or query in u.lower()) and u not in found:
                 found[u]={"name":info.get("name","—"),"username":u,"uid":info.get("uid",0)}
-        for ds,recs in appts.items():
+        for ds2,recs in appts.items():
             for r in recs:
                 u=r.get("username","")
                 if (query in r.get("name","").lower() or query in u.lower()) and u not in found:
@@ -2524,66 +2455,50 @@ async def handle_text(msg: types.Message):
         if not found:
             await msg.answer("Не найдено.",reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ",callback_data=f"manual_client_{forced}")],
-            ]+kb_nav("adm_cal",depth=1,is_adm=True))); return
+            ]+nav_admin("adm_back",depth=1))); return
         rows=[[InlineKeyboardButton(
             text=f"👤 {u['name']} @{u['username']}" if u['name'] else f"👤 @{u['username']}",
             callback_data=f"pick_client_{forced}_{u['username']}")]
             for u in found.values()]
-        rows+=kb_nav("adm_cal",depth=1,is_adm=True)
-        await msg.answer(f"Найдено {len(found)}:",
-                         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)); return
+        rows+=nav_admin("adm_back",depth=1)
+        await msg.answer(f"Найдено {len(found)}:",reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)); return
  
-    if step == "adm_excel_from":
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$",text):
-            await msg.answer("❌ Формат: `2026-05-01`",parse_mode="Markdown"); return
-        st["excel_from"]=text; st["step"]="adm_excel_to"; set_st(uid,st)
-        await msg.answer("Дата *конца* периода *ГГГГ-ММ-ДД*:",parse_mode="Markdown"); return
- 
-    if step == "adm_excel_to":
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$",text):
-            await msg.answer("❌ Формат: `2026-05-31`",parse_mode="Markdown"); return
-        d_from=st["excel_from"]; d_to=text; clr_st(uid)
-        if not EXCEL_OK: await msg.answer("❌ openpyxl не установлен."); return
-        buf=make_excel(d_from,d_to)
-        if buf: await msg.answer_document(
-            BufferedInputFile(buf.read(),filename=f"записи_{d_from}_{d_to}.xlsx"),
-            caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}")
-        else: await msg.answer("Записей за этот период нет.")
-        return
- 
-    if step == "adm_reg_username":
+    if step=="adm_reg_username":
         st["reg_username"]=text.lstrip("@"); st["step"]="adm_reg_name"; set_st(uid,st)
         await msg.answer("Введи имя клиента:"); return
-    if step == "adm_reg_name":
+    if step=="adm_reg_name":
         st["reg_name"]=text; st["step"]="adm_reg_day"; set_st(uid,st)
         days=["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
         kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=d,callback_data=f"regday_{d}")] for d in days])
         await msg.answer("День недели:",reply_markup=kb); return
-    if step == "adm_reg_time":
+    if step=="adm_reg_time":
         if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$",text):
             await msg.answer("❌ Формат: `15:00`",parse_mode="Markdown"); return
         regs=db_get("regulars",[]); regs.append({
             "username":st["reg_username"],"name":st["reg_name"],"day":st["reg_day"],"time":text})
         db_set("regulars",regs); clr_st(uid)
-        await msg.answer(f"✅ Добавлен @{st['reg_username']}.",reply_markup=kb_admin()); return
-    if step == "adm_reg_del_name":
+        today=date.today()
+        await msg.answer(f"✅ Добавлен @{st['reg_username']}.",reply_markup=cal_admin(today.year,today.month)); return
+    if step=="adm_reg_del_name":
         u=text.lstrip("@"); regs=db_get("regulars",[])
         db_set("regulars",[r for r in regs if r["username"].lower()!=u.lower()])
-        clr_st(uid); await msg.answer(f"✅ @{u} удалён.",reply_markup=kb_admin()); return
-    if step == "adm_unblock":
+        clr_st(uid); today=date.today()
+        await msg.answer(f"✅ @{u} удалён.",reply_markup=cal_admin(today.year,today.month)); return
+    if step=="adm_unblock":
         try:
             target=int(text); bl=db_get("blocked",[])
             if target in bl: bl.remove(target); db_set("blocked",bl)
-            await msg.answer(f"✅ {target} разблокирован.",reply_markup=kb_admin())
+            await msg.answer(f"✅ {target} разблокирован.")
         except: await msg.answer("❌ Введи числовой ID.")
         clr_st(uid); return
-    if step == "adm_broadcast_text":
+    if step=="adm_broadcast_text":
         users=db_get("users",[]); sent=0
         for u in users:
             try: await bot.send_message(u,text); sent+=1; await asyncio.sleep(0.05)
             except: pass
-        clr_st(uid); await msg.answer(f"✅ Разослано {sent} пользователям.",reply_markup=kb_admin()); return
-    if step == "adm_post_link":
+        clr_st(uid); today=date.today()
+        await msg.answer(f"✅ Разослано {sent} пользователям.",reply_markup=cal_admin(today.year,today.month)); return
+    if step=="adm_post_link":
         users=db_get("users",[]); sent=0
         for u in users:
             try:
@@ -2591,21 +2506,20 @@ async def handle_text(msg: types.Message):
                     f"На канале много полезного - вот свежий материал:\n{text}\n\nПодписывайся 👉 @kasikov_psy")
                 sent+=1; await asyncio.sleep(0.05)
             except: pass
-        clr_st(uid); await msg.answer(f"✅ Пост разослан {sent} пользователям.",reply_markup=kb_admin()); return
+        clr_st(uid); today=date.today()
+        await msg.answer(f"✅ Пост разослан {sent} пользователям.",reply_markup=cal_admin(today.year,today.month)); return
  
-    log_act(uid, msg.from_user.username, f"msg:{text[:30]}")
-    is_adm = is_admin(msg.from_user.username)
-    await msg.answer("Выбери действие:", reply_markup=kb_main(is_adm=is_adm))
+    log_act(uid,msg.from_user.username,f"msg:{text[:30]}")
+    is_adm=is_admin(msg.from_user.username)
+    await msg.answer("Выбери действие:",reply_markup=kb_main(is_adm=is_adm))
  
  
 async def main():
     log.info("="*50)
-    log.info("БОТ КАСИКОВА v10.0")
+    log.info("БОТ КАСИКОВА v11.0")
     log.info("/admin - панель | /stop - остановить")
     log.info("="*50)
     asyncio.create_task(bg_loop())
     await dp.start_polling(bot)
  
-if __name__ == "__main__":
-    asyncio.run(main())
- 
+if __name__=="__main__":
