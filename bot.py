@@ -208,15 +208,15 @@ async def eoa(cb, text, kb=None, pm="Markdown"):
 # ═══════════════════════════════════════════════════
  
 def nav_client(back_cb, depth=1):
-    row = [InlineKeyboardButton(text="↩️ НАЗАД", callback_data=back_cb)]
+    row = [InlineKeyboardButton(text=f"{W}↩️ НАЗАД{W}", callback_data=back_cb)]
     if depth >= 2:
-        row.append(InlineKeyboardButton(text="🏠 ГЛАВНОЕ МЕНЮ", callback_data="main"))
+        row.append(InlineKeyboardButton(text=f"{W}🏠 ГЛАВНОЕ МЕНЮ{W}", callback_data="main"))
     return [row]
  
 def nav_admin(back_cb, depth=1):
-    row = [InlineKeyboardButton(text="↩️ НАЗАД", callback_data=back_cb)]
+    row = [InlineKeyboardButton(text=f"{W}↩️ НАЗАД{W}", callback_data=back_cb)]
     if depth >= 2:
-        row.append(InlineKeyboardButton(text="🔐 МЕНЮ АДМИНА", callback_data="adm_back"))
+        row.append(InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back"))
     return [row]
  
 # ═══════════════════════════════════════════════════
@@ -454,17 +454,17 @@ DRIP = {
  
 def kb_main(is_adm=False):
     rows = [
-        [InlineKeyboardButton(text="🎁 ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»",   callback_data="guide")],
-        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО",         callback_data="free")],
-        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",            callback_data="paid_info")],
-        [InlineKeyboardButton(text="💼 ОБО МНЕ",                            callback_data="about")],
-        [InlineKeyboardButton(text="❓ FAQ ЧАСТЫЕ ВОПРОСЫ",                 callback_data="faq")],
-        [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",                         callback_data="my_appts")],
-        [InlineKeyboardButton(text="📢 МОЙ TELEGRAM-КАНАЛ",
+        [InlineKeyboardButton(text=f"{W}🎁 ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»{W}", callback_data="guide")],
+        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}",       callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",          callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}💼 ОБО МНЕ{W}",                          callback_data="about")],
+        [InlineKeyboardButton(text=f"{W}❓ FAQ ЧАСТЫЕ ВОПРОСЫ{W}",               callback_data="faq")],
+        [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}",                       callback_data="my_appts")],
+        [InlineKeyboardButton(text=f"{W}📢 МОЙ TELEGRAM-КАНАЛ{W}",
                               url=f"https://t.me/{CHANNEL.lstrip('@')}")],
     ]
     if is_adm:
-        rows.append([InlineKeyboardButton(text="🔐 МЕНЮ АДМИНА", callback_data="adm_back")])
+        rows.append([InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_admin():
@@ -564,7 +564,8 @@ def cal_admin(year, month):
         InlineKeyboardButton(text="❌ МЕСЯЦ ЗАКРЫТЬ",  callback_data="adm_block_month"),
     ])
     # Все кнопки меню админа прямо под календарём
-    rows.append([InlineKeyboardButton(text="🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ", callback_data="adm_unconf")])
+    rows.append([InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}", callback_data="adm_book_menu")])
+    rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ{W}", callback_data="adm_unconf")])
     rows.append([InlineKeyboardButton(text="📋 ВСЕ ЗАПИСИ",              callback_data="adm_list")])
     rows.append([InlineKeyboardButton(text="📈 АНАЛИТИКА",               callback_data="adm_analytics")])
     rows.append([
@@ -577,7 +578,10 @@ def cal_admin(year, month):
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_month_picker(action="close"):
-    today = date.today(); rows = []
+    today = date.today()
+    bd    = db_get("blocked_dates", [])
+    slots = db_get("slots", {})
+    rows  = []
     for y in [today.year, today.year + 1]:
         rows.append([InlineKeyboardButton(text=str(y), callback_data="noop")])
         for start in range(0, 12, 3):
@@ -586,10 +590,26 @@ def kb_month_picker(action="close"):
                 if date(y, m+1, 1) < today.replace(day=1):
                     row.append(InlineKeyboardButton(text=" ", callback_data="noop"))
                 else:
+                    import calendar as cal_mod
+                    dn = cal_mod.monthrange(y, m+1)[1]
+                    days = [f"{y}-{m+1:02d}-{d:02d}" for d in range(1, dn+1)]
+                    closed_days = [d for d in days if d in bd]
+                    open_days   = [d for d in days if slots.get(d)]
+                    if len(closed_days) == dn:
+                        icon = "❌"  # весь месяц закрыт
+                    elif open_days:
+                        icon = "✅"  # есть открытые слоты
+                    else:
+                        icon = ""   # пустой
+                    label = f"{icon}{MN_SHORT[m]}" if icon else MN_SHORT[m]
                     row.append(InlineKeyboardButton(
-                        text=MN_SHORT[m],
+                        text=label,
                         callback_data=f"month_pick_{action}_{y}_{m+1:02d}"))
             rows.append(row)
+    rows.append([
+        InlineKeyboardButton(text=f"{W}✅ ОТКРЫТЬ МЕСЯЦ{W}", callback_data="adm_open_month"),
+        InlineKeyboardButton(text=f"{W}❌ ЗАКРЫТЬ МЕСЯЦ{W}", callback_data="adm_block_month"),
+    ])
     rows += nav_admin("adm_cal", depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
@@ -969,10 +989,10 @@ async def adm_menu(cb: types.CallbackQuery):
 async def about(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔬 МОИ МЕТОДЫ",                callback_data="how_work")],
-        [InlineKeyboardButton(text="📋 КАК МЫ РАБОТАЕМ",           callback_data="contract")],
-        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🔬 МОИ МЕТОДЫ{W}",                callback_data="how_work")],
+        [InlineKeyboardButton(text=f"{W}📋 КАК МЫ РАБОТАЕМ{W}",           callback_data="contract")],
+        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(T_ABOUT, parse_mode="Markdown", reply_markup=kb)
  
@@ -980,9 +1000,9 @@ async def about(cb: types.CallbackQuery):
 async def how_work(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📋 КАК МЫ РАБОТАЕМ",           callback_data="contract")],
-        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}📋 КАК МЫ РАБОТАЕМ{W}",           callback_data="contract")],
+        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
     ] + nav_client("about", depth=2))
     await cb.message.answer(T_HOW, parse_mode="Markdown", reply_markup=kb)
  
@@ -990,9 +1010,9 @@ async def how_work(cb: types.CallbackQuery):
 async def contract_cb(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔬 МОИ МЕТОДЫ",                callback_data="how_work")],
-        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🔬 МОИ МЕТОДЫ{W}",                callback_data="how_work")],
+        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
     ] + nav_client("about", depth=2))
     await cb.message.answer(T_CONTRACT, parse_mode="Markdown", reply_markup=kb)
  
@@ -1000,8 +1020,8 @@ async def contract_cb(cb: types.CallbackQuery):
 async def faq(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(T_FAQ, parse_mode="Markdown", reply_markup=kb)
  
@@ -1009,7 +1029,7 @@ async def faq(cb: types.CallbackQuery):
 async def paid_info(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ", callback_data="book_paid")],
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}", callback_data="book_paid")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(T_PRICE, parse_mode="Markdown", reply_markup=kb)
  
@@ -1037,7 +1057,7 @@ async def check_sub(cb: types.CallbackQuery):
         drip_add(uid)
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        ] + nav_client("main", depth=1))
+        ] + nav_client("guide", depth=2))
         await cb.message.answer(
             f"✅ Держи гайд!\n\n"
             f"Спокойно в своём темпе - открывай когда будешь готов.\n"
@@ -1701,18 +1721,15 @@ async def adm_bulk_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     ds = cb.data[14:]
     set_st(cb.from_user.id, {"step":"adm_bulk_pick","bulk_ds":ds,"bulk_mode":"open"})
-    await cb.answer()
-    await eoa(cb, f"Нажми на слот который хочешь *открыть* на {fmt_date(ds)}:",
-              kb=slots_day_admin(ds))
+    await cb.answer("Нажми на слот для открытия")
+    # Просто обновляем слоты — клик на слот обработается через adm_toggle_slot
  
 @dp.callback_query(F.data.startswith("adm_bulk_close_"))
 async def adm_bulk_close(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     ds = cb.data[15:]
     set_st(cb.from_user.id, {"step":"adm_bulk_pick","bulk_ds":ds,"bulk_mode":"close"})
-    await cb.answer()
-    await eoa(cb, f"Нажми на слот который хочешь *закрыть* на {fmt_date(ds)}:",
-              kb=slots_day_admin(ds))
+    await cb.answer("Нажми на слот для закрытия")
  
 @dp.callback_query(F.data.startswith("adm_full_open_"))
 async def adm_full_open(cb: types.CallbackQuery):
@@ -1776,6 +1793,22 @@ async def aslot_open(cb: types.CallbackQuery):
         tg=st.get("manual_tg","")
         await eoa(cb,f"✅ @{tg} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
                   kb=kb_platform_adm("adm_book_menu",depth=2)); return
+    if st.get("step")=="adm_bulk_pick":
+        mode=st.get("bulk_mode","open")
+        slots2=db_get("slots",{}); cs2=db_get("closed_slots",{})
+        if ds not in slots2: slots2[ds]=[]
+        if ds not in cs2: cs2[ds]=[]
+        if mode=="open":
+            if tm not in slots2[ds]: slots2[ds].append(tm); slots2[ds]=sorted(slots2[ds])
+            if tm in cs2[ds]: cs2[ds].remove(tm)
+            await cb.answer(f"🟢 Слот {tm} открыт")
+        else:
+            if tm not in cs2[ds]: cs2[ds].append(tm)
+            await cb.answer(f"🔴 Слот {tm} закрыт")
+        db_set("slots",slots2); db_set("closed_slots",cs2)
+        # Остаёмся в режиме bulk — обновляем слоты
+        await eoa(cb,f"📅 *{fmt_date(ds)}*\n🟢 свободно  🔴 закрыто",
+                  kb=slots_day_admin(ds)); return
     rec=next((r for r in appts.get(ds,[]) if r["time"]==tm),None)
     if rec:
         tl="💼 Платная" if rec.get("type")=="paid" else "🆓 Бесплатная"
