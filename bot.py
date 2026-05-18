@@ -42,7 +42,8 @@ PRICES = {
     "1.5 часа":7500,"2 часа":10000,"2.5 часа":12500,"3 часа":15000,
 }
 SRC_MAP = {"ig":"📸 Instagram","tt":"🎵 TikTok","yt":"▶️ YouTube",
-           "vk":"💙 ВКонтакте","ref":"👥 От знакомых","other":"🌐 Другое"}
+           "vk":"💙 ВКонтакте","fb":"📘 Facebook",
+           "ref":"👥 От знакомых","other":"🌐 Другое"}
  
 PAYMENT_CARD_RU = (
     "💳 *ОПЛАТА КАРТОЙ РФ / СБП*\n\n"
@@ -589,7 +590,7 @@ def kb_month_picker(action="close"):
                         text=MN_SHORT[m],
                         callback_data=f"month_pick_{action}_{y}_{m+1:02d}"))
             rows.append(row)
-    rows += nav_admin("adm_cal", depth=1)
+    rows += nav_admin("adm_cal", depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_day_admin(ds):
@@ -613,6 +614,10 @@ def slots_day_admin(ds):
     if row: rows.append(row)
     if not is_past:
         rows.append([
+            InlineKeyboardButton(text="✅ ОТКРЫТЬ СЛОТ", callback_data=f"adm_bulk_open_{ds}"),
+            InlineKeyboardButton(text="❌ ЗАКРЫТЬ СЛОТ", callback_data=f"adm_bulk_close_{ds}"),
+        ])
+        rows.append([
             InlineKeyboardButton(text="✅ ОТКРЫТЬ ДЕНЬ", callback_data=f"adm_full_open_{ds}"),
             InlineKeyboardButton(text="❌ ЗАКРЫТЬ ДЕНЬ", callback_data=f"adm_full_close_{ds}"),
         ])
@@ -623,7 +628,7 @@ def slots_day_admin(ds):
     else:
         rows.append([InlineKeyboardButton(text="➕ ДОБАВИТЬ СЕССИЮ",
                                           callback_data=f"adm_add_session_{ds}")])
-    rows += nav_admin("adm_cal", depth=1)
+    rows += nav_admin("adm_cal", depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_menu_user(ds):
@@ -1032,7 +1037,7 @@ async def check_sub(cb: types.CallbackQuery):
         drip_add(uid)
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
-        ])
+        ] + nav_client("main", depth=1))
         await cb.message.answer(
             f"✅ Держи гайд!\n\n"
             f"Спокойно в своём темпе - открывай когда будешь готов.\n"
@@ -1099,12 +1104,33 @@ async def uslot_sel(cb: types.CallbackQuery):
     uid   = cb.from_user.id; st = get_st(uid); ctype = st.get("type","free")
     await cb.answer()
     if ctype in ("free","reschedule"):
-        st.update({"step":"desc","date":ds,"time":tm,"duration":"30 мин"}); set_st(uid,st)
-        await cb.message.answer(
-            "Отлично, записал 👍\n\n"
-            "Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
-            "что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
-            "Если не хочешь - просто пропусти, встретимся и разберёмся на месте.")
+        # Если перенос — пропускаем описание и платформу
+        if st.get("skip_desc") and st.get("skip_platform") and st.get("platform"):
+            plat = st.get("platform","")
+            name = cb.from_user.first_name or "Клиент"
+            st.update({"step":"confirm","date":ds,"time":tm,"duration":"30 мин",
+                       "name":name,"desc":"Перенос встречи"}); set_st(uid,st)
+            ck = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ{W}", callback_data=f"confirm_{ds}_{tm}")],
+                [InlineKeyboardButton(text=f"{W}✏️ ИЗМЕНИТЬ{W}",    callback_data="reschedule_full")],
+            ] + nav_client("main", depth=3))
+            await cb.message.answer(
+                f"Проверь данные перед подтверждением:\n\n"
+                f"📅 {fmt_date(ds)} в {tm} МСК\n"
+                f"🆓 Бесплатная - 30 минут\n📱 {plat}\n\nВсё верно?{W}",
+                reply_markup=ck)
+        else:
+            st.update({"step":"desc","date":ds,"time":tm,"duration":"30 мин"}); set_st(uid,st)
+            skip_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⏭ ПРОПУСТИТЬ", callback_data="desc_keep")],
+            ])
+            await cb.message.answer(
+                "Отлично, записал 👍\n\n"
+                "Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
+                "что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
+                "Если не хочешь - просто нажми ПРОПУСТИТЬ,\n"
+                "и выбери дальше платформу для видеозвонка 👇",
+                reply_markup=skip_kb)
     else:
         st.update({"step":"duration","date":ds,"time":tm}); set_st(uid,st)
         await cb.message.answer(f"Выбери длительность встречи:{W}", reply_markup=kb_duration(depth=3))
@@ -1123,11 +1149,16 @@ async def dur_sel(cb: types.CallbackQuery):
 async def session_first(cb: types.CallbackQuery):
     uid = cb.from_user.id; st = get_st(uid); st["step"] = "desc"; set_st(uid,st)
     await cb.answer()
+    skip_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏭ ПРОПУСТИТЬ", callback_data="desc_keep")],
+    ])
     await cb.message.answer(
         "Отлично, записал 👍\n\n"
         "Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
         "что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
-        "Если не хочешь - просто пропусти, встретимся и разберёмся на месте.")
+        "Если не хочешь - просто нажми ПРОПУСТИТЬ,\n"
+        "и выбери дальше платформу для видеозвонка 👇",
+        reply_markup=skip_kb)
  
 @dp.callback_query(F.data == "session_repeat")
 async def session_repeat(cb: types.CallbackQuery):
@@ -1189,6 +1220,9 @@ async def reschedule_full(cb: types.CallbackQuery):
 async def confirm_book(cb: types.CallbackQuery):
     uid = cb.from_user.id; st = get_st(uid)
     if not st: await cb.answer("Ошибка, начните заново", show_alert=True); return
+    if "date" not in st or "time" not in st:
+        await cb.answer("Сессия истекла. Начни запись заново.", show_alert=True)
+        clr_st(uid); return
     ds    = st["date"]; tm = st["time"]
     name  = st.get("name", cb.from_user.first_name or "—")
     ctype = st.get("type","free"); plat = st.get("platform","—")
@@ -1211,7 +1245,7 @@ async def confirm_book(cb: types.CallbackQuery):
         [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data="reschedule")],
         [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cancel_{ds}_{tm}")],
         [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",  callback_data="my_appts")],
-    ])
+    ] + nav_client("main", depth=2))
     await cb.message.answer(
         f"✅ Записал тебя!\n\n"
         f"📅 {fmt_date(ds)} в {tm} МСК\n"
@@ -1250,8 +1284,8 @@ async def my_appts(cb: types.CallbackQuery):
             rows.append([InlineKeyboardButton(
                 text=f"📅 {fmt_date(ds)} {r['time']} {tl}",
                 callback_data=f"my_rec_{ds}_{r['time']}")])
-    rows += nav_client("main", depth=1)
-    if len(rows) == 1:
+    rows += nav_client("main", depth=2)
+    if len(rows) == 2:
         await cb.message.answer("У тебя нет предстоящих записей.",
                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     else:
@@ -1269,7 +1303,22 @@ async def my_rec(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data == "reschedule")
 async def reschedule(cb: types.CallbackQuery):
-    set_st(cb.from_user.id,{"type":"reschedule"}); today = date.today(); await cb.answer()
+    uid = cb.from_user.id
+    # Находим текущую запись клиента чтобы взять платформу
+    appts = db_get("appts",{}); today_d = date.today()
+    old_plat = ""; old_type = "free"
+    for ds, recs in appts.items():
+        try: d = datetime.strptime(ds,"%Y-%m-%d").date()
+        except: continue
+        if d < today_d: continue
+        for r in recs:
+            if r.get("user_id") == uid:
+                old_plat = r.get("platform",""); old_type = r.get("type","free")
+                break
+        if old_plat: break
+    set_st(uid, {"type":"reschedule","platform":old_plat,"ctype":old_type,
+                 "skip_desc":True,"skip_platform":True})
+    today = date.today(); await cb.answer()
     await cb.message.answer(
         f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month))
@@ -1431,11 +1480,16 @@ async def adm_ok(cb: types.CallbackQuery):
             [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
             [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
         ])
+        ck_conf = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
+        ] + nav_client("main", depth=2))
         await bot.send_message(uid,
             f"✅ Встреча подтверждена!\n\n📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
             f"{'🔗 '+link if link else ''}\n\n"
             "За час до встречи пришлю напоминание - там же попрошу подтвердить что всё в силе.",
-            reply_markup=ck)
+            reply_markup=ck_conf)
     except: pass
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"adm_cncl_{uid}_{ds}_{tm}")],
@@ -1535,6 +1589,15 @@ async def reg_new(cb: types.CallbackQuery):
 # АДМИН - КАЛЕНДАРЬ
 # ═══════════════════════════════════════════════════
  
+ 
+@dp.callback_query(F.data == "adm_cal")
+async def adm_cal(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    await cb.answer(); today = date.today()
+    await eoa(cb,
+        "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт",
+        kb=cal_admin(today.year, today.month))
+ 
 @dp.callback_query(F.data.startswith("acal_"))
 async def acal_nav(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
@@ -1632,6 +1695,25 @@ async def aday_open(cb: types.CallbackQuery):
         f"📅 *{fmt_date(ds)}*\n🟢 свободно  🔵 запись  🟡 неподтверждённая  🔴 закрыто",
         kb=slots_day_admin(ds))
  
+ 
+@dp.callback_query(F.data.startswith("adm_bulk_open_"))
+async def adm_bulk_open(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    ds = cb.data[14:]
+    set_st(cb.from_user.id, {"step":"adm_bulk_pick","bulk_ds":ds,"bulk_mode":"open"})
+    await cb.answer()
+    await eoa(cb, f"Нажми на слот который хочешь *открыть* на {fmt_date(ds)}:",
+              kb=slots_day_admin(ds))
+ 
+@dp.callback_query(F.data.startswith("adm_bulk_close_"))
+async def adm_bulk_close(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    ds = cb.data[15:]
+    set_st(cb.from_user.id, {"step":"adm_bulk_pick","bulk_ds":ds,"bulk_mode":"close"})
+    await cb.answer()
+    await eoa(cb, f"Нажми на слот который хочешь *закрыть* на {fmt_date(ds)}:",
+              kb=slots_day_admin(ds))
+ 
 @dp.callback_query(F.data.startswith("adm_full_open_"))
 async def adm_full_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
@@ -1667,7 +1749,7 @@ async def aslot_blocked_open(cb: types.CallbackQuery):
     kb=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🟢 ОТКРЫТЬ СЛОТ",     callback_data=f"adm_unblock_slot_{ds}_{tm}")],
         [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬ КЛИЕНТА",callback_data=f"adm_book_blocked_{ds}_{tm}")],
-    ]+nav_admin(f"aday_{ds}",depth=1))
+    ]+nav_admin(f"aday_{ds}",depth=2))
     await cb.answer()
     await eoa(cb,f"🔴 Слот {tm} на {fmt_date(ds)} - закрыт. Что сделать?",kb=kb)
  
@@ -1703,7 +1785,7 @@ async def aslot_open(cb: types.CallbackQuery):
             [InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ",     callback_data=f"adm_ok_{rec['user_id']}_{ds}_{tm}")],
             [InlineKeyboardButton(text="❌ ОТМЕНИТЬ ЗАПИСЬ", callback_data=f"adm_cncl_{rec['user_id']}_{ds}_{tm}")],
             [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",       callback_data=f"adm_mv_{rec['user_id']}_{ds}_{tm}")],
-        ]+nav_admin(f"aday_{ds}",depth=1))
+        ]+nav_admin(f"aday_{ds}",depth=2))
         await eoa(cb,
             f"🔵 {fmt_date(ds)} в {tm}\n\n👤 {rec['name']} @{rec.get('username','')}\n"
             f"{tl} | ⏱ {rec.get('duration','—')}\n📱 {rec.get('platform','—')}\nСтатус: {conf}",kb=kb)
@@ -1714,7 +1796,7 @@ async def aslot_open(cb: types.CallbackQuery):
                 text="🔴 ЗАКРЫТЬ СЛОТ" if (in_s and tm not in cs) else "🟢 ОТКРЫТЬ СЛОТ",
                 callback_data=f"adm_toggle_slot_{ds}_{tm}")],
             [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬ КЛИЕНТА",callback_data=f"adm_book_to_{ds}_{tm}")],
-        ]+nav_admin(f"aday_{ds}",depth=1))
+        ]+nav_admin(f"aday_{ds}",depth=2))
         await cb.answer()
         status="🟢 Свободен" if in_s and tm not in cs else "🔴 Закрыт"
         await eoa(cb,f"{status} - {fmt_date(ds)} в {tm}",kb=kb)
@@ -1837,7 +1919,7 @@ async def month_pick(cb: types.CallbackQuery):
             slots[ds]=ALL_SLOTS.copy()
         db_set("blocked_dates",bd); db_set("slots",slots)
         await cb.answer(f"✅ {MN_RU[m-1]} {y} открыт")
-        await eoa(cb,f"✅ {MN_RU[m-1]} {y} открыт.",kb=kb_admin())
+        await eoa(cb,"Выбери месяц:",kb=kb_month_picker("open"))
     else:
         if conf:
             set_st(cb.from_user.id,{"step":"adm_bm_confirm","block_month":ms})
@@ -1851,7 +1933,7 @@ async def month_pick(cb: types.CallbackQuery):
                 ds=f"{y}-{m:02d}-{d:02d}"
                 if ds not in bd: bd.append(ds)
             db_set("blocked_dates",bd); await cb.answer(f"❌ {MN_RU[m-1]} {y} закрыт")
-            await eoa(cb,f"❌ {MN_RU[m-1]} {y} закрыт.",kb=kb_admin())
+            await eoa(cb,"Выбери месяц:",kb=kb_month_picker("close"))
  
 @dp.callback_query(F.data=="adm_bm_yes")
 async def adm_bm_yes(cb: types.CallbackQuery):
