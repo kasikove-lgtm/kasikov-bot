@@ -545,9 +545,8 @@ def cal_admin(year, month):
     nm, ny = (month+1, year) if month < 12 else (1, year+1)
     # Строка 1: навигация + записаться
     rows.append([
-        InlineKeyboardButton(text="◀️", callback_data=f"acal_{py}_{pm}"),
-        InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ", callback_data="adm_book_menu"),
-        InlineKeyboardButton(text="▶️", callback_data=f"acal_{ny}_{nm}"),
+        InlineKeyboardButton(text=f"{W}◀️{W}", callback_data=f"acal_{py}_{pm}"),
+        InlineKeyboardButton(text=f"{W}▶️{W}", callback_data=f"acal_{ny}_{nm}"),
     ])
     # Строка 2: день открыть/закрыть
     rows.append([
@@ -690,7 +689,8 @@ def kb_banks(uid, ds, tm):
         [InlineKeyboardButton(text=b, callback_data=f"bank_{b}_{uid}_{ds}_{tm}")] for b in BANKS
     ])
  
-def get_clients_kb(step, back_cb="adm_book_menu"):
+def get_all_users():
+    """Возвращает всех пользователей из всех источников"""
     ud = db_get("all_users_data",{}); appts = db_get("appts",{})
     seen = set(); users_data = []
     for info in ud.values():
@@ -702,12 +702,29 @@ def get_clients_kb(step, back_cb="adm_book_menu"):
             u = r.get("username","")
             if u and u != "нет" and u not in seen:
                 seen.add(u); users_data.append({"name":r.get("name","—"),"username":u,"uid":r.get("user_id",0)})
+    return users_data
+ 
+def get_clients_kb(step, back_cb="adm_book_menu"):
+    users_data = get_all_users()
+    rows = []
+    # Первая кнопка — список всех клиентов
+    rows.append([InlineKeyboardButton(
+        text=f"{W}👥 КЛИЕНТЫ ({len(users_data)}){W}",
+        callback_data=f"show_clients_{step}")])
+    rows.append([InlineKeyboardButton(text=f"{W}🔍 НАЙТИ ПО ИМЕНИ{W}", callback_data=f"search_client_{step}")])
+    rows.append([InlineKeyboardButton(text=f"{W}✏️ ВВЕСТИ ВРУЧНУЮ{W}", callback_data=f"manual_client_{step}")])
+    rows += nav_admin(back_cb, depth=2)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+ 
+def get_clients_list_kb(step, back_cb="adm_book_menu"):
+    """Полный список клиентов кнопками"""
+    users_data = get_all_users()
     rows = []
     for u in users_data:
         lbl = f"👤 {u['name']} @{u['username']}" if u['name'] else f"👤 @{u['username']}"
         rows.append([InlineKeyboardButton(text=lbl, callback_data=f"pick_client_{step}_{u['username']}")])
-    rows.append([InlineKeyboardButton(text="🔍 НАЙТИ ПО ИМЕНИ", callback_data=f"search_client_{step}")])
-    rows.append([InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ", callback_data=f"manual_client_{step}")])
+    rows.append([InlineKeyboardButton(text=f"{W}🔍 НАЙТИ ПО ИМЕНИ{W}", callback_data=f"search_client_{step}")])
+    rows.append([InlineKeyboardButton(text=f"{W}✏️ ВВЕСТИ ВРУЧНУЮ{W}", callback_data=f"manual_client_{step}")])
     rows += nav_admin(back_cb, depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
@@ -2047,6 +2064,24 @@ async def adm_book_reg(cb: types.CallbackQuery):
     rows+=[[InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ",callback_data="manual_client_reg")]]
     rows+=nav_admin("adm_book_menu",depth=2)
     await cb.answer(); await eoa(cb,"Выбери постоянного клиента:",kb=InlineKeyboardMarkup(inline_keyboard=rows))
+ 
+ 
+@dp.callback_query(F.data.startswith("show_clients_"))
+async def show_clients(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    step = cb.data[13:]
+    back_map = {"free":"adm_book_new_free","paid":"adm_book_new_paid","reg":"adm_book_reg"}
+    back_cb  = back_map.get(step,"adm_book_menu")
+    await cb.answer()
+    kb = get_clients_list_kb(step, back_cb)
+    if kb.inline_keyboard:
+        await eoa(cb, "Выбери клиента из списка:", kb=kb)
+    else:
+        await eoa(cb, "Клиентов пока нет. Введи вручную:",
+                  kb=InlineKeyboardMarkup(inline_keyboard=[
+                      [InlineKeyboardButton(text=f"{W}✏️ ВВЕСТИ ВРУЧНУЮ{W}",
+                                            callback_data=f"manual_client_{step}")]
+                  ] + nav_admin(back_cb, depth=2)))
  
 @dp.callback_query(F.data.startswith("pick_client_"))
 async def pick_client(cb: types.CallbackQuery):
