@@ -243,21 +243,23 @@ T_ABOUT = """💼 *ОБО МНЕ*
  
 Я не классический психолог в пиджаке с дипломом на стене. Я человек, который сам прошёл через то, с чем ты сейчас пришёл.
  
+Сегодня я работаю с людьми в период расставания и развода. За плечами более 10 лет практики, более 200 часов личной и групповой терапии, более 200 реальных историй в работе с отношениями.
+ 
+Я говорю на твоём языке. Смотрю не сверху - а рядом. Потому что я там был. И я знаю, что из этого выходят.
+ 
 Двое детей и развод после 15 лет брака. Расставание после пяти лет отношений. Полный финансовый крах. И каждый раз казалось, что мир просто взял и перевернулся. То ощущение утром, когда просыпаешься, смотришь в потолок и думаешь: кто я теперь? Что вообще осталось?
  
 Я знаю это изнутри. Не по книжкам.
- 
-Я из тех, кто привык добиваться результата. Кандидат в мастера спорта по плаванию, семь лет музыкальной школы. 15 лет в продажах - от мерчендайзера до директора по региону. Больше 500 собеседований, тренинги, команды. Шесть бизнесов. Флиппинг недвижимости - 175+ объектов, больше 10 лет на рынке.
- 
-Это дало мне навык который важен в нашей работе - быстро и точно понимать человека. Слышать не только слова, но и то, что за ними.
- 
-А потом всё рухнуло разом. Бизнес, отношения, темп. Деньги, статус, ориентиры. Я упал и разбился в дребезги.
- 
 И я не стал делать вид, что всё нормально. Пересобрал себя. В своём темпе, честно, бережно к себе, без имитации бодрости.
  
-Сегодня я работаю с людьми в период расставания и развода. За плечами более 10 лет практики, более 200 часов личной и групповой терапии, более 200 реальных историй в работе с отношениями.
+Я из тех, кто привык добиваться результата. Кандидат в мастера спорта по плаванию, семь лет музыкальной школы. 15 лет в продажах - от мерчендайзера до директора по региону.
+Больше 500 собеседований, тренинги, команды.
  
-Я говорю на твоём языке. Смотрю не сверху - а рядом. Потому что я там был. И я знаю, что из этого выходят."""
+Шесть бизнесов. Флиппинг недвижимости - 175+ объектов, больше 10 лет на рынке.
+ 
+Это дало мне навык который важен в нашей работе - быстро и точно понимать человека.
+ 
+Слышать не только слова, но и то, что за ними."""
  
 T_HOW = """🔬 *МОИ МЕТОДЫ*
  
@@ -344,20 +346,19 @@ T_CONTRACT = """📋 *КАК МЫ РАБОТАЕМ*
 *КОНФИДЕНЦИАЛЬНОСТЬ*
 Всё что происходит на сессиях - остаётся между нами."""
  
-T_PRICE = """💳 *ПЛАТНАЯ КОНСУЛЬТАЦИЯ*
+T_PRICE = """💳 *ПЛАТНАЯ ВСТРЕЧА - УСЛОВИЯ И ЦЕНЫ*
  
-*1-я платная встреча*
-_(если на бесплатную опоздал более чем на 10 мин или отменил менее чем за 24 часа)_
-Есть возможность провести встречу
+*Первая платная встреча*
+Если на бесплатную не получилось прийти вовремя или предупредить заранее - бывает всякое. В этом случае первую встречу можно провести в коротком платном формате.
 30 минут - 3 000 руб.
  
 *Разовая встреча*
 60 минут - 5 000 руб.
-_Минимальная встреча для постоянной работы - 60 минут._
+Если хочешь поработать регулярно - минимальный формат для постоянной работы 60 минут.
  
 *Пакет «Глубокая работа»*
 5 встреч (5 часов) - 20 000 руб.
-_экономия 5 000 руб._
+Экономия 5 000 руб. по сравнению с разовыми. Действует 2 месяца.
  
 Работаю по видео - Zoom, ВКонтакте, Яндекс Телемост, Google Meet, Teams, MAX."""
  
@@ -470,7 +471,7 @@ def kb_main(is_adm=False):
     rows = [
         [InlineKeyboardButton(text=f"{W}🎁 ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»{W}", callback_data="guide")],
         [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}",       callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",          callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}",       callback_data="paid_info")],
         [InlineKeyboardButton(text=f"{W}💼 ОБО МНЕ{W}",                          callback_data="about")],
         [InlineKeyboardButton(text=f"{W}❓ FAQ ЧАСТЫЕ ВОПРОСЫ{W}",               callback_data="faq")],
         [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}",                       callback_data="my_appts")],
@@ -484,20 +485,20 @@ def kb_main(is_adm=False):
 def kb_admin():
     """Меню админа - сразу показывает календарь + кнопки управления"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ", callback_data="adm_unconf")],
-        [InlineKeyboardButton(text="📋 ВСЕ ЗАПИСИ",              callback_data="adm_list")],
-        [InlineKeyboardButton(text="📈 АНАЛИТИКА",               callback_data="adm_analytics")],
-        [InlineKeyboardButton(text="📤 РАССЫЛКА ВСЕМ",           callback_data="adm_broadcast"),
-         InlineKeyboardButton(text="📤 ПОСТ ИЗ КАНАЛА",          callback_data="adm_post")],
-        [InlineKeyboardButton(text="👥 ПОСТОЯННЫЕ КЛИЕНТЫ",      callback_data="adm_regulars")],
-        [InlineKeyboardButton(text="🗑 УДАЛИТЬ КЛИЕНТА",          callback_data="adm_delete_client")],
-        [InlineKeyboardButton(text="🏠 МЕНЮ КЛИЕНТА",            callback_data="main")],
+        [InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ{W}", callback_data="adm_unconf")],
+        [InlineKeyboardButton(text=f"{W}📋 ВСЕ ЗАПИСИ{W}",              callback_data="adm_list")],
+        [InlineKeyboardButton(text=f"{W}📈 АНАЛИТИКА{W}",               callback_data="adm_analytics")],
+        [InlineKeyboardButton(text=f"{W}📤 РАССЫЛКА ВСЕМ{W}",           callback_data="adm_broadcast"),
+         InlineKeyboardButton(text=f"{W}📤 ПОСТ ИЗ КАНАЛА{W}",          callback_data="adm_post")],
+        [InlineKeyboardButton(text=f"{W}👥 ПОСТОЯННЫЕ КЛИЕНТЫ{W}",      callback_data="adm_regulars")],
+        [InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ КЛИЕНТА{W}",          callback_data="adm_delete_client")],
+        [InlineKeyboardButton(text=f"{W}🏠 МЕНЮ КЛИЕНТА{W}",            callback_data="main")],
     ])
  
-def cal_user(year, month):
+def cal_user(year, month, back_cb="main"):
     today = date.today(); cal = calendar.monthcalendar(year, month)
     bd    = db_get("blocked_dates",[]); rows = []
-    rows.append([InlineKeyboardButton(text=f"📅 {MN_RU[month-1]} {year}", callback_data="noop")])
+    rows.append([InlineKeyboardButton(text=f"{W}📅 {MN_RU[month-1]} {year}{W}", callback_data="noop")])
     rows.append([InlineKeyboardButton(text=d, callback_data="noop")
                  for d in ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]])
     for week in cal:
@@ -512,7 +513,7 @@ def cal_user(year, month):
                 elif ds in bd:
                     row.append(InlineKeyboardButton(text="❌", callback_data="noop"))
                 elif free_slots(ds):
-                    row.append(InlineKeyboardButton(text=f"✅{day}", callback_data=f"uday_{ds}"))
+                    row.append(InlineKeyboardButton(text=f"{W}✅{day}{W}", callback_data=f"uday_{ds}"))
                 else:
                     row.append(InlineKeyboardButton(text=str(day), callback_data="no_slots"))
         rows.append(row)
@@ -520,19 +521,19 @@ def cal_user(year, month):
     nm, ny = (month+1, year) if month < 12 else (1, year+1)
     nav = []
     if date(py, pm, 1) >= today.replace(day=1):
-        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"ucal_{py}_{pm}"))
+        nav.append(InlineKeyboardButton(text=f"{W}◀️{W}", callback_data=f"ucal_{py}_{pm}"))
     else:
         nav.append(InlineKeyboardButton(text=" ", callback_data="noop"))
     nav.append(InlineKeyboardButton(text=" ", callback_data="noop"))
-    nav.append(InlineKeyboardButton(text="▶️", callback_data=f"ucal_{ny}_{nm}"))
+    nav.append(InlineKeyboardButton(text=f"{W}▶️{W}", callback_data=f"ucal_{ny}_{nm}"))
     rows.append(nav)
-    rows.append([InlineKeyboardButton(text="🏠 ГЛАВНОЕ МЕНЮ", callback_data="main")])
+    rows += nav_client(back_cb, depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def cal_admin(year, month):
     today = date.today(); cal = calendar.monthcalendar(year, month)
     appts = db_get("appts",{}); slots = db_get("slots",{}); bd = db_get("blocked_dates",[]); rows = []
-    rows.append([InlineKeyboardButton(text=f"🔧 {MN_RU[month-1]} {year}", callback_data="noop")])
+    rows.append([InlineKeyboardButton(text=f"{W}🔧 {MN_RU[month-1]} {year}{W}", callback_data="noop")])
     rows.append([InlineKeyboardButton(text=d, callback_data="noop")
                  for d in ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]])
     for week in cal:
@@ -548,10 +549,10 @@ def cal_admin(year, month):
                     da = appts.get(ds,[]); is_bd = ds in bd
                     hu = any(not r.get("confirmed") for r in da)
                     hc = any(r.get("confirmed") for r in da)
-                    if hu:       row.append(InlineKeyboardButton(text=f"🟡{day}", callback_data=f"aday_{ds}"))
-                    elif hc:     row.append(InlineKeyboardButton(text=f"🔵{day}", callback_data=f"aday_{ds}"))
-                    elif is_bd:  row.append(InlineKeyboardButton(text=f"❌{day}", callback_data=f"aday_{ds}"))
-                    elif slots.get(ds): row.append(InlineKeyboardButton(text=f"✅{day}", callback_data=f"aday_{ds}"))
+                    if hu:       row.append(InlineKeyboardButton(text=f"{W}🟡{day}{W}", callback_data=f"aday_{ds}"))
+                    elif hc:     row.append(InlineKeyboardButton(text=f"{W}🔵{day}{W}", callback_data=f"aday_{ds}"))
+                    elif is_bd:  row.append(InlineKeyboardButton(text=f"{W}❌{day}{W}", callback_data=f"aday_{ds}"))
+                    elif slots.get(ds): row.append(InlineKeyboardButton(text=f"{W}✅{day}{W}", callback_data=f"aday_{ds}"))
                     else:        row.append(InlineKeyboardButton(text=str(day), callback_data=f"aday_{ds}"))
         rows.append(row)
     pm, py = (month-1, year) if month > 1 else (12, year-1)
@@ -563,31 +564,31 @@ def cal_admin(year, month):
     ])
     # Строка 2: день открыть/закрыть
     rows.append([
-        InlineKeyboardButton(text="✅ ДЕНЬ ОТКРЫТЬ",   callback_data="adm_open_day_btn"),
-        InlineKeyboardButton(text="❌ ДЕНЬ ЗАКРЫТЬ",   callback_data="adm_close_day_btn"),
+        InlineKeyboardButton(text=f"{W}✅ ДЕНЬ ОТКРЫТЬ{W}",   callback_data="adm_open_day_btn"),
+        InlineKeyboardButton(text=f"{W}❌ ДЕНЬ ЗАКРЫТЬ{W}",   callback_data="adm_close_day_btn"),
     ])
     # Строка 3: неделю открыть/закрыть
     rows.append([
-        InlineKeyboardButton(text="✅ НЕДЕЛЮ ОТКРЫТЬ", callback_data="adm_open_week_cal"),
-        InlineKeyboardButton(text="❌ НЕДЕЛЮ ЗАКРЫТЬ", callback_data="adm_block_week_cal"),
+        InlineKeyboardButton(text=f"{W}✅ НЕДЕЛЮ ОТКРЫТЬ{W}", callback_data="adm_open_week_cal"),
+        InlineKeyboardButton(text=f"{W}❌ НЕДЕЛЮ ЗАКРЫТЬ{W}", callback_data="adm_block_week_cal"),
     ])
     # Строка 4: месяц открыть/закрыть
     rows.append([
-        InlineKeyboardButton(text="✅ МЕСЯЦ ОТКРЫТЬ",  callback_data="adm_open_month"),
-        InlineKeyboardButton(text="❌ МЕСЯЦ ЗАКРЫТЬ",  callback_data="adm_block_month"),
+        InlineKeyboardButton(text=f"{W}✅ МЕСЯЦ ОТКРЫТЬ{W}",  callback_data="adm_open_month"),
+        InlineKeyboardButton(text=f"{W}❌ МЕСЯЦ ЗАКРЫТЬ{W}",  callback_data="adm_block_month"),
     ])
     # Все кнопки меню админа прямо под календарём
     rows.append([InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}", callback_data="adm_book_menu")])
     rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ{W}", callback_data="adm_unconf")])
-    rows.append([InlineKeyboardButton(text="📋 ВСЕ ЗАПИСИ",              callback_data="adm_list")])
-    rows.append([InlineKeyboardButton(text="📈 АНАЛИТИКА",               callback_data="adm_analytics")])
+    rows.append([InlineKeyboardButton(text=f"{W}📋 ВСЕ ЗАПИСИ{W}",              callback_data="adm_list")])
+    rows.append([InlineKeyboardButton(text=f"{W}📈 АНАЛИТИКА{W}",               callback_data="adm_analytics")])
     rows.append([
-        InlineKeyboardButton(text="📤 РАССЫЛКА ВСЕМ",  callback_data="adm_broadcast"),
-        InlineKeyboardButton(text="📤 ПОСТ ИЗ КАНАЛА", callback_data="adm_post"),
+        InlineKeyboardButton(text=f"{W}📤 РАССЫЛКА ВСЕМ{W}",  callback_data="adm_broadcast"),
+        InlineKeyboardButton(text=f"{W}📤 ПОСТ ИЗ КАНАЛА{W}", callback_data="adm_post"),
     ])
-    rows.append([InlineKeyboardButton(text="👥 ПОСТОЯННЫЕ КЛИЕНТЫ",  callback_data="adm_regulars")])
-    rows.append([InlineKeyboardButton(text="🗑 УДАЛИТЬ КЛИЕНТА",      callback_data="adm_delete_client")])
-    rows.append([InlineKeyboardButton(text="🏠 МЕНЮ КЛИЕНТА",         callback_data="main")])
+    rows.append([InlineKeyboardButton(text=f"{W}👥 ПОСТОЯННЫЕ КЛИЕНТЫ{W}",  callback_data="adm_regulars")])
+    rows.append([InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ КЛИЕНТА{W}",      callback_data="adm_delete_client")])
+    rows.append([InlineKeyboardButton(text=f"{W}🏠 МЕНЮ КЛИЕНТА{W}",         callback_data="main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_month_picker(action="close"):
@@ -637,7 +638,7 @@ def slots_for_booking(ds):
             cb_d = f"aslot_{ds}_{t}"
         else:
             em = "🟢"; cb_d = f"aslot_{ds}_{t}"
-        row.append(InlineKeyboardButton(text=f"{em}{t}", callback_data=cb_d))
+        row.append(InlineKeyboardButton(text=f"{W}{em}{t}{W}", callback_data=cb_d))
         if len(row) == 3: rows.append(row); row = []
     if row: rows.append(row)
     rows += nav_admin("adm_cal", depth=2)
@@ -659,7 +660,7 @@ def slots_day_admin(ds):
             em = "🔴"; cb = f"aslot_blocked_{ds}_{t}"
         else:
             em = "🟢"; cb = f"aslot_{ds}_{t}"
-        row.append(InlineKeyboardButton(text=f"{em}{t}", callback_data=cb))
+        row.append(InlineKeyboardButton(text=f"{W}{em}{t}{W}", callback_data=cb))
         if len(row) == 3: rows.append(row); row = []
     if row: rows.append(row)
     if not is_past:
@@ -669,7 +670,7 @@ def slots_day_admin(ds):
         ])
  
     else:
-        rows.append([InlineKeyboardButton(text="➕ ДОБАВИТЬ СЕССИЮ",
+        rows.append([InlineKeyboardButton(text=f"{W}➕ ДОБАВИТЬ СЕССИЮ{W}",
                                           callback_data=f"adm_add_session_{ds}")])
     rows += nav_admin("adm_cal", depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -681,9 +682,9 @@ def slots_menu_user(ds):
     for t in slots.get(ds,[]):
         if t in closed: continue
         if t in taken:
-            row.append(InlineKeyboardButton(text=f"🔴{t}", callback_data="slot_taken"))
+            row.append(InlineKeyboardButton(text=f"{W}🔴{t}{W}", callback_data="slot_taken"))
         else:
-            row.append(InlineKeyboardButton(text=f"🟢{t}", callback_data=f"uslot_{ds}_{t}"))
+            row.append(InlineKeyboardButton(text=f"{W}🟢{t}{W}", callback_data=f"uslot_{ds}_{t}"))
         if len(row) == 4: rows.append(row); row = []
     if row: rows.append(row)
     rows += nav_client("main", depth=1)
@@ -701,12 +702,12 @@ def kb_platform(back_cb="free", depth=3):
  
 def kb_platform_adm(back_cb="adm_back", depth=2):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎥 ZOOM",            callback_data="plat_Zoom")],
-        [InlineKeyboardButton(text="📱 ВКОНТАКТЕ",       callback_data="plat_ВКонтакте")],
-        [InlineKeyboardButton(text="💻 ЯНДЕКС ТЕЛЕМОСТ", callback_data="plat_Яндекс Телемост")],
-        [InlineKeyboardButton(text="📹 GOOGLE MEET",     callback_data="plat_Google Meet")],
-        [InlineKeyboardButton(text="🖥 TEAMS",           callback_data="plat_Teams")],
-        [InlineKeyboardButton(text="📲 MAX",             callback_data="plat_MAX")],
+        [InlineKeyboardButton(text=f"{W}🎥 ZOOM{W}",            callback_data="plat_Zoom")],
+        [InlineKeyboardButton(text=f"{W}📱 ВКОНТАКТЕ{W}",       callback_data="plat_ВКонтакте")],
+        [InlineKeyboardButton(text=f"{W}💻 ЯНДЕКС ТЕЛЕМОСТ{W}", callback_data="plat_Яндекс Телемост")],
+        [InlineKeyboardButton(text=f"{W}📹 GOOGLE MEET{W}",     callback_data="plat_Google Meet")],
+        [InlineKeyboardButton(text=f"{W}🖥 TEAMS{W}",           callback_data="plat_Teams")],
+        [InlineKeyboardButton(text=f"{W}📲 MAX{W}",             callback_data="plat_MAX")],
     ] + nav_admin(back_cb, depth=depth))
  
 def kb_duration(depth=3):
@@ -828,9 +829,9 @@ async def bg_loop():
                         )
                         try:
                             kb = InlineKeyboardMarkup(inline_keyboard=[
-                                [InlineKeyboardButton(text="✅ ПОДТВЕРЖДАЮ", callback_data=f"cli_ok_{ds}_{rec['time']}")],
-                                [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cli_cancel_{ds}_{rec['time']}")],
-                                [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{rec['time']}")],
+                                [InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРЖДАЮ{W}", callback_data=f"cli_ok_{ds}_{rec['time']}")],
+                                [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",    callback_data=f"cli_cancel_{ds}_{rec['time']}")],
+                                [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data=f"cli_move_{ds}_{rec['time']}")],
                             ])
                             await bot.send_message(rec["user_id"],
                                 f"⏰ Напоминание!\n\nЧерез час наша встреча - {rec['time']} МСК\n"
@@ -842,9 +843,9 @@ async def bg_loop():
  
                     if 59 <= diff <= 61 and not rec.get("rem_admin"):
                         kb2 = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ", callback_data=f"adm_ok_{rec.get('user_id',0)}_{ds}_{rec['time']}")],
-                            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"adm_cncl_{rec.get('user_id',0)}_{ds}_{rec['time']}")],
-                            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"adm_mv_{rec.get('user_id',0)}_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ{W}", callback_data=f"adm_ok_{rec.get('user_id',0)}_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",    callback_data=f"adm_cncl_{rec.get('user_id',0)}_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data=f"adm_mv_{rec.get('user_id',0)}_{ds}_{rec['time']}")],
                         ])
                         await notify_adm(
                             f"⏰ *Через час консультация!*\n\n"
@@ -858,9 +859,9 @@ async def bg_loop():
                     if 29 <= diff <= 31 and rec.get("rem_client") and not rec.get("cli_confirmed") and rec.get("user_id"):
                         try:
                             kb = InlineKeyboardMarkup(inline_keyboard=[
-                                [InlineKeyboardButton(text="✅ ПОДТВЕРЖДАЮ", callback_data=f"cli_ok_{ds}_{rec['time']}")],
-                                [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cli_cancel_{ds}_{rec['time']}")],
-                                [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{rec['time']}")],
+                                [InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРЖДАЮ{W}", callback_data=f"cli_ok_{ds}_{rec['time']}")],
+                                [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",    callback_data=f"cli_cancel_{ds}_{rec['time']}")],
+                                [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data=f"cli_move_{ds}_{rec['time']}")],
                             ])
                             await bot.send_message(rec["user_id"],
                                 "Ты ещё не подтвердил участие. Всё в силе? 😊", reply_markup=kb)
@@ -870,11 +871,11 @@ async def bg_loop():
                     past = (now-(adt+timedelta(minutes=dm2+5))).total_seconds()/60
                     if 0 <= past <= 2 and not rec.get("session_asked"):
                         kb3 = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text="✅ ДА, БЕСПЛАТНАЯ",     callback_data=f"sess_yes_free_{ds}_{rec['time']}")],
-                            [InlineKeyboardButton(text="✅ ДА, ПЛАТНАЯ",         callback_data=f"sess_yes_paid_{ds}_{rec['time']}")],
-                            [InlineKeyboardButton(text="❌ НЕТ, БЕСПЛАТНАЯ",    callback_data=f"sess_no_free_{ds}_{rec['time']}")],
-                            [InlineKeyboardButton(text="❌ НЕТ, ПЛАТНАЯ",        callback_data=f"sess_no_paid_{ds}_{rec['time']}")],
-                            [InlineKeyboardButton(text="⏰ ОПОЗДАЛ/НЕ ПРИШЁЛ", callback_data=f"sess_noshow_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}✅ ДА, БЕСПЛАТНАЯ{W}",     callback_data=f"sess_yes_free_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}✅ ДА, ПЛАТНАЯ{W}",         callback_data=f"sess_yes_paid_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}❌ НЕТ, БЕСПЛАТНАЯ{W}",    callback_data=f"sess_no_free_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}❌ НЕТ, ПЛАТНАЯ{W}",        callback_data=f"sess_no_paid_{ds}_{rec['time']}")],
+                            [InlineKeyboardButton(text=f"{W}⏰ ОПОЗДАЛ/НЕ ПРИШЁЛ{W}", callback_data=f"sess_noshow_{ds}_{rec['time']}")],
                         ])
                         await notify_adm(
                             f"📅 {fmt_date(ds)} в {rec['time']} МСК\n{tl} | ⏱ {rec.get('duration','—')}\n"
@@ -895,7 +896,7 @@ async def bg_loop():
                         f"👤 {item['name']}\n🆔 @{item['username']}\n\n"
                         "Жду обратную связь и план работы, Евгений.",
                         kb=InlineKeyboardMarkup(inline_keyboard=[[
-                            InlineKeyboardButton(text="📝 ОТПРАВИТЬ ОБРАТНУЮ СВЯЗЬ",
+                            InlineKeyboardButton(text=f"{W}📝 ОТПРАВИТЬ ОБРАТНУЮ СВЯЗЬ{W}",
                                                  callback_data=f"send_fb_{key}")
                         ]]))
                     item["remind_at"] = (now+timedelta(hours=24)).isoformat()
@@ -920,11 +921,11 @@ async def bg_loop():
                             kb = None
                             if d["kb"] == "free":
                                 kb = InlineKeyboardMarkup(inline_keyboard=[[
-                                    InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")
+                                    InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")
                                 ]])
                             elif d["kb"] == "channel":
                                 kb = InlineKeyboardMarkup(inline_keyboard=[[
-                                    InlineKeyboardButton(text="📢 Подписаться на канал @kasikov_psy",
+                                    InlineKeyboardButton(text=f"{W}📢 Подписаться на канал @kasikov_psy{W}",
                                                          url=f"https://t.me/{CHANNEL.lstrip('@')}")
                                 ]])
                             await bot.send_message(item["uid"], d["text"], reply_markup=kb)
@@ -983,9 +984,9 @@ async def cmd_handler(msg: types.Message):
         tl   = "💼 Платная" if r.get("type")=="paid" else "🆓 Бесплатная"
         plat = r.get("platform","—"); link = PLATFORMS.get(plat,""); dur = r.get("duration","—")
         ck = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"cli_move_{ds}_{r['time']}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cli_cancel_{ds}_{r['time']}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",  callback_data="my_appts")],
+            [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data=f"cli_move_{ds}_{r['time']}")],
+            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",    callback_data=f"cli_cancel_{ds}_{r['time']}")],
+            [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}",  callback_data="my_appts")],
         ])
         await msg.answer(
             f"С возвращением! 👋\n\n✅ Твоя запись уже создана:\n\n"
@@ -1033,7 +1034,7 @@ async def about(cb: types.CallbackQuery):
         [InlineKeyboardButton(text=f"{W}🔬 МОИ МЕТОДЫ{W}",                callback_data="how_work")],
         [InlineKeyboardButton(text=f"{W}📋 КАК МЫ РАБОТАЕМ{W}",           callback_data="contract")],
         [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(T_ABOUT, parse_mode="Markdown", reply_markup=kb)
  
@@ -1043,7 +1044,7 @@ async def how_work(cb: types.CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}📋 КАК МЫ РАБОТАЕМ{W}",           callback_data="contract")],
         [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("about", depth=2))
     await cb.message.answer(T_HOW, parse_mode="Markdown", reply_markup=kb)
  
@@ -1053,7 +1054,7 @@ async def contract_cb(cb: types.CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}🔬 МОИ МЕТОДЫ{W}",                callback_data="how_work")],
         [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("about", depth=2))
     await cb.message.answer(T_CONTRACT, parse_mode="Markdown", reply_markup=kb)
  
@@ -1062,7 +1063,7 @@ async def faq(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",    callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(T_FAQ, parse_mode="Markdown", reply_markup=kb)
  
@@ -1070,8 +1071,8 @@ async def faq(cb: types.CallbackQuery):
 async def paid_info(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}", callback_data="book_paid")],
-    ] + nav_client("main", depth=1))
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}", callback_data="paid_info")],
+    ] + nav_client("main", depth=2))
     await cb.message.answer(T_PRICE, parse_mode="Markdown", reply_markup=kb)
  
 @dp.callback_query(F.data == "guide")
@@ -1079,9 +1080,9 @@ async def guide(cb: types.CallbackQuery):
     await cb.answer()
     log_act(cb.from_user.id, cb.from_user.username, "guide")
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 ПОДПИСАТЬСЯ НА КАНАЛ",
+        [InlineKeyboardButton(text=f"{W}📢 ПОДПИСАТЬСЯ НА КАНАЛ{W}",
                               url=f"https://t.me/{CHANNEL.lstrip('@')}")],
-        [InlineKeyboardButton(text="✅ Я ПОДПИСАЛСЯ - ДАВАЙ ГАЙД", callback_data="check_sub")],
+        [InlineKeyboardButton(text=f"{W}✅ Я ПОДПИСАЛСЯ - ДАВАЙ ГАЙД{W}", callback_data="check_sub")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(
         f"🎁 *ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»*\n\n"
@@ -1097,7 +1098,7 @@ async def check_sub(cb: types.CallbackQuery):
         log_act(uid, cb.from_user.username, "got_guide")
         drip_add(uid)
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО", callback_data="free")],
+            [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
         ] + nav_client("guide", depth=2))
         await cb.message.answer(
             f"✅ Держи гайд!\n\n"
@@ -1116,7 +1117,7 @@ async def free_consult(cb: types.CallbackQuery):
     uid = cb.from_user.id
     if get_free_used(uid):
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ", callback_data="paid_info")],
+            [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
         ] + nav_client("main", depth=1))
         await cb.answer()
         await cb.message.answer(
@@ -1125,28 +1126,30 @@ async def free_consult(cb: types.CallbackQuery):
             reply_markup=kb)
         return
     await cb.answer()
-    set_st(uid, {"type":"free"})
+    set_st(uid, {"type":"free","cal_back":"free"})
     log_act(uid, cb.from_user.username, "free_consult")
     await cb.message.answer(T_FREE1)
     await asyncio.sleep(0.3)
     today = date.today()
     await cb.message.answer(
         T_FREE2 + W,
-        reply_markup=cal_user(today.year, today.month))
+        reply_markup=cal_user(today.year, today.month, back_cb="free"))
  
 @dp.callback_query(F.data == "book_paid")
 async def book_paid(cb: types.CallbackQuery):
     await cb.answer()
-    set_st(cb.from_user.id, {"type":"paid"})
+    set_st(cb.from_user.id, {"type":"paid","cal_back":"paid_info"})
     today = date.today()
     await cb.message.answer(
         f"Выбери удобную дату 👇\n✅ - есть свободные слоты{W}",
-        reply_markup=cal_user(today.year, today.month))
+        reply_markup=cal_user(today.year, today.month, back_cb="paid_info"))
  
 @dp.callback_query(F.data.startswith("ucal_"))
 async def ucal_nav(cb: types.CallbackQuery):
     _, y, m = cb.data.split("_")
-    try: await cb.message.edit_reply_markup(reply_markup=cal_user(int(y),int(m)))
+    uid = cb.from_user.id; st = get_st(uid)
+    back_cb = st.get("cal_back","main")
+    try: await cb.message.edit_reply_markup(reply_markup=cal_user(int(y),int(m),back_cb=back_cb))
     except: pass
  
 @dp.callback_query(F.data.startswith("uday_"))
@@ -1183,7 +1186,7 @@ async def uslot_sel(cb: types.CallbackQuery):
         else:
             st.update({"step":"desc","date":ds,"time":tm,"duration":"30 мин"}); set_st(uid,st)
             skip_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏭ ПРОПУСТИТЬ", callback_data="desc_keep")],
+                [InlineKeyboardButton(text=f"{W}⏭ ПРОПУСТИТЬ{W}", callback_data="desc_keep")],
             ])
             await cb.message.answer(
                 "Отлично, записал 👍\n\n"
@@ -1211,7 +1214,7 @@ async def session_first(cb: types.CallbackQuery):
     uid = cb.from_user.id; st = get_st(uid); st["step"] = "desc"; set_st(uid,st)
     await cb.answer()
     skip_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⏭ ПРОПУСТИТЬ", callback_data="desc_keep")],
+        [InlineKeyboardButton(text=f"{W}⏭ ПРОПУСТИТЬ{W}", callback_data="desc_keep")],
     ])
     await cb.message.answer(
         "Отлично, записал 👍\n\n"
@@ -1251,8 +1254,8 @@ async def plat_sel(cb: types.CallbackQuery):
     if st.get("step") == "adm_manual_plat":
         st["platform"] = plat; st["step"] = "adm_manual_type"; set_st(uid,st); await cb.answer()
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🆓 БЕСПЛАТНАЯ", callback_data="adm_mtype_free")],
-            [InlineKeyboardButton(text="💼 ПЛАТНАЯ",    callback_data="adm_mtype_paid")],
+            [InlineKeyboardButton(text=f"{W}🆓 БЕСПЛАТНАЯ{W}", callback_data="adm_mtype_free")],
+            [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ{W}",    callback_data="adm_mtype_paid")],
         ] + nav_admin("adm_book_menu", depth=2))
         await eoa(cb, "Тип встречи?", kb=kb); return
     st["platform"] = plat; st["step"] = "confirm"; set_st(uid,st)
@@ -1273,9 +1276,11 @@ async def plat_sel(cb: types.CallbackQuery):
 async def reschedule_full(cb: types.CallbackQuery):
     uid   = cb.from_user.id; st = get_st(uid); ctype = st.get("type","free")
     set_st(uid, {"type":ctype}); today = date.today(); await cb.answer()
+    uid2 = cb.from_user.id; st2 = get_st(uid2)
+    back2 = st2.get("cal_back","main")
     await cb.message.answer(
         f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
-        reply_markup=cal_user(today.year, today.month))
+        reply_markup=cal_user(today.year, today.month, back_cb=back2))
  
 @dp.callback_query(F.data.startswith("confirm_"))
 async def confirm_book(cb: types.CallbackQuery):
@@ -1303,9 +1308,9 @@ async def confirm_book(cb: types.CallbackQuery):
     db_set("appts",appts); _block_adj(ds,tm,dur); clr_st(uid)
     tl  = "💼 Платная" if ctype=="paid" else "🆓 Бесплатная"
     ck  = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data="reschedule")],
-        [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"cancel_{ds}_{tm}")],
-        [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ",  callback_data="my_appts")],
+        [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data="reschedule")],
+        [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",    callback_data=f"cancel_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}",  callback_data="my_appts")],
     ] + nav_client("main", depth=2))
     await cb.message.answer(
         f"✅ Записал тебя!\n\n"
@@ -1314,9 +1319,9 @@ async def confirm_book(cb: types.CallbackQuery):
         f"Скоро подтвержу и пришлю ссылку для входа.",
         reply_markup=ck)
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ", callback_data=f"adm_ok_{uid}_{ds}_{tm}")],
-        [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"adm_cncl_{uid}_{ds}_{tm}")],
-        [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"adm_mv_{uid}_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ{W}", callback_data=f"adm_ok_{uid}_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",    callback_data=f"adm_cncl_{uid}_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data=f"adm_mv_{uid}_{ds}_{tm}")],
     ])
     await notify_adm(
         f"🔔 *Новая запись!*\n📅 {fmt_date(ds)} в {tm} МСК\n{tl} | ⏱ {dur}\n"
@@ -1325,8 +1330,8 @@ async def confirm_book(cb: types.CallbackQuery):
     if ctype == "paid":
         price  = PRICES.get(dur,5000)
         pay_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 ОПЛАТА КАРТОЙ РФ / СБП",   callback_data=f"pay_ru_{uid}_{ds}_{tm}")],
-            [InlineKeyboardButton(text="💳 ОПЛАТА ЗАРУБЕЖНОЙ КАРТОЙ", callback_data=f"pay_intl_{uid}_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}💳 ОПЛАТА КАРТОЙ РФ / СБП{W}",   callback_data=f"pay_ru_{uid}_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}💳 ОПЛАТА ЗАРУБЕЖНОЙ КАРТОЙ{W}", callback_data=f"pay_intl_{uid}_{ds}_{tm}")],
         ])
         await bot.send_message(uid,
             f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:",
@@ -1357,8 +1362,8 @@ async def my_appts(cb: types.CallbackQuery):
 async def my_rec(cb: types.CallbackQuery):
     _, _, ds, tm = cb.data.split("_",3)
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ", callback_data="reschedule")],
-        [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",  callback_data=f"cancel_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}", callback_data="reschedule")],
+        [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",  callback_data=f"cancel_{ds}_{tm}")],
     ] + nav_client("my_appts", depth=2))
     await cb.message.answer(f"📅 {fmt_date(ds)} в {tm} МСК", reply_markup=kb)
  
@@ -1382,7 +1387,7 @@ async def reschedule(cb: types.CallbackQuery):
     today = date.today(); await cb.answer()
     await cb.message.answer(
         f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
-        reply_markup=cal_user(today.year, today.month))
+        reply_markup=cal_user(today.year, today.month, back_cb="my_appts"))
  
 @dp.callback_query(F.data.startswith("cancel_"))
 async def cancel_appt(cb: types.CallbackQuery):
@@ -1427,14 +1432,14 @@ async def cli_move(cb: types.CallbackQuery):
     set_st(cb.from_user.id,{"type":"reschedule"}); today = date.today(); await cb.answer()
     await cb.message.answer(
         f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
-        reply_markup=cal_user(today.year, today.month))
+        reply_markup=cal_user(today.year, today.month, back_cb="my_appts"))
     await notify_adm(f"🔄 Клиент хочет перенести\n🆔 @{cb.from_user.username or 'нет'}")
  
 @dp.callback_query(F.data.startswith("pay_ru_"))
 async def pay_ru(cb: types.CallbackQuery):
     parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ ОПЛАТИЛ", callback_data=f"pay_ru_confirm_{uid}_{ds}_{tm}")
+        InlineKeyboardButton(text=f"{W}✅ ОПЛАТИЛ{W}", callback_data=f"pay_ru_confirm_{uid}_{ds}_{tm}")
     ]])
     await cb.answer()
     await cb.message.answer(PAYMENT_CARD_RU, parse_mode="Markdown", reply_markup=kb)
@@ -1457,7 +1462,7 @@ async def bank_sel(cb: types.CallbackQuery):
     db_set("appts",appts); await cb.answer(f"✅ Банк {bank} выбран")
     await cb.message.answer("✅ Информация об оплате отправлена Евгению. Ожидай подтверждения.")
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ ОПЛАТУ",
+        InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ ОПЛАТУ{W}",
                              callback_data=f"adm_confirm_pay_{uid}_{ds}_{tm}")
     ]])
     await notify_adm(
@@ -1475,9 +1480,9 @@ async def adm_confirm_pay(cb: types.CallbackQuery):
     db_set("appts",appts)
     try:
         ck = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
+            [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}", callback_data="my_appts")],
         ])
         await bot.send_message(uid,
             f"✅ Оплата подтверждена!\n\n📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
@@ -1490,8 +1495,8 @@ async def adm_confirm_pay(cb: types.CallbackQuery):
 async def pay_intl(cb: types.CallbackQuery):
     parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📋 ПОЛУЧИТЬ РЕКВИЗИТЫ", callback_data=f"intl_req_{uid}_{ds}_{tm}")],
-        [InlineKeyboardButton(text="✅ ОПЛАТИЛ",            callback_data=f"intl_paid_{uid}_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}📋 ПОЛУЧИТЬ РЕКВИЗИТЫ{W}", callback_data=f"intl_req_{uid}_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}✅ ОПЛАТИЛ{W}",            callback_data=f"intl_paid_{uid}_{ds}_{tm}")],
     ])
     await cb.answer()
     await cb.message.answer(PAYMENT_CARD_INTL, parse_mode="Markdown", reply_markup=kb)
@@ -1519,7 +1524,7 @@ async def intl_paid(cb: types.CallbackQuery):
     await cb.answer()
     await cb.message.answer("✅ Информация об оплате отправлена Евгению. Ожидай подтверждения.")
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ ОПЛАТУ",
+        InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ ОПЛАТУ{W}",
                              callback_data=f"adm_confirm_pay_{uid}_{ds}_{tm}")
     ]])
     await notify_adm(
@@ -1537,14 +1542,14 @@ async def adm_ok(cb: types.CallbackQuery):
     db_set("appts",appts)
     try:
         ck = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
+            [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}", callback_data="my_appts")],
         ])
         ck_conf = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
+            [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}", callback_data="my_appts")],
         ] + nav_client("main", depth=2))
         await bot.send_message(uid,
             f"✅ Встреча подтверждена!\n\n📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
@@ -1553,9 +1558,9 @@ async def adm_ok(cb: types.CallbackQuery):
             reply_markup=ck_conf)
     except: pass
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",    callback_data=f"adm_cncl_{uid}_{ds}_{tm}")],
-        [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",   callback_data=f"adm_mv_{uid}_{ds}_{tm}")],
-        [InlineKeyboardButton(text="🔐 МЕНЮ АДМИНА", callback_data="adm_back")],
+        [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",    callback_data=f"adm_cncl_{uid}_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data=f"adm_mv_{uid}_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")],
     ])
     await eoa(cb,
         f"✅ *Запись подтверждена!*\n\n📅 {fmt_date(ds)} в {tm} МСК\n👤 Клиент уведомлён.",
@@ -1605,8 +1610,8 @@ async def sess_result(cb: types.CallbackQuery):
             await eoa(cb,cb.message.text+"\n\n✅ Отмечено: проведена")
         else:
             kb=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📋 СКОПИРОВАТЬ (ПОСТОЯННЫЙ)",callback_data=f"reg_copy_{ds}_{tm}")],
-                [InlineKeyboardButton(text="➕ НОВАЯ ЗАПИСЬ (ПОСТОЯННЫЙ)",callback_data=f"reg_new_{ds}_{tm}")],
+                [InlineKeyboardButton(text=f"{W}📋 СКОПИРОВАТЬ (ПОСТОЯННЫЙ){W}",callback_data=f"reg_copy_{ds}_{tm}")],
+                [InlineKeyboardButton(text=f"{W}➕ НОВАЯ ЗАПИСЬ (ПОСТОЯННЫЙ){W}",callback_data=f"reg_new_{ds}_{tm}")],
             ]+nav_admin("adm_back",depth=1))
             await eoa(cb,
                 f"✅ Платная встреча записана.\n\n📅 {fmt_date(ds)} в {tm}\n💼 | ⏱ {dur}\n"
@@ -1710,7 +1715,7 @@ async def aday_open(cb: types.CallbackQuery):
             set_st(uid,{"step":"adm_block_week_confirm","block_week_start":ds})
             ct="\n".join(f"  {d}: {len(appts[d])} записей" for d in conflicts)
             kb=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ ЗАБЛОКИРОВАТЬ (ЗАПИСИ СОХРАНЯТСЯ)",callback_data="adm_bw_yes")],
+                [InlineKeyboardButton(text=f"{W}✅ ЗАБЛОКИРОВАТЬ (ЗАПИСИ СОХРАНЯТСЯ){W}",callback_data="adm_bw_yes")],
             ]+nav_admin("adm_cal",depth=1))
             await cb.answer()
             await eoa(cb,f"⚠️ В этой неделе есть записи:\n{ct}\n\nВсё равно заблокировать?",kb=kb)
@@ -1810,8 +1815,8 @@ async def aslot_blocked_open(cb: types.CallbackQuery):
         await eoa(cb,f"✅ @{st['manual_tg']} - {fmt_date(ds)} в {tm}\n\nПлатформа?",
                   kb=kb_platform_adm("adm_book_menu",depth=2)); return
     kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🟢 ОТКРЫТЬ СЛОТ",     callback_data=f"adm_unblock_slot_{ds}_{tm}")],
-        [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬ КЛИЕНТА",callback_data=f"adm_book_blocked_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}🟢 ОТКРЫТЬ СЛОТ{W}",     callback_data=f"adm_unblock_slot_{ds}_{tm}")],
+        [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}",callback_data=f"adm_book_blocked_{ds}_{tm}")],
     ]+nav_admin(f"aday_{ds}",depth=2))
     await cb.answer()
     await eoa(cb,f"🔴 Слот {tm} на {fmt_date(ds)} - закрыт. Что сделать?",kb=kb)
@@ -1861,9 +1866,9 @@ async def aslot_open(cb: types.CallbackQuery):
         conf="✅ подтверждена" if rec.get("confirmed") else "🟡 не подтверждена"
         await cb.answer()
         kb=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ ПОДТВЕРДИТЬ",     callback_data=f"adm_ok_{rec['user_id']}_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ ЗАПИСЬ", callback_data=f"adm_cncl_{rec['user_id']}_{ds}_{tm}")],
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",       callback_data=f"adm_mv_{rec['user_id']}_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ{W}",     callback_data=f"adm_ok_{rec['user_id']}_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ ЗАПИСЬ{W}", callback_data=f"adm_cncl_{rec['user_id']}_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",       callback_data=f"adm_mv_{rec['user_id']}_{ds}_{tm}")],
         ]+nav_admin(f"aday_{ds}",depth=2))
         await eoa(cb,
             f"🔵 {fmt_date(ds)} в {tm}\n\n👤 {rec['name']} @{rec.get('username','')}\n"
@@ -1874,7 +1879,7 @@ async def aslot_open(cb: types.CallbackQuery):
             [InlineKeyboardButton(
                 text="🔴 ЗАКРЫТЬ СЛОТ" if (in_s and tm not in cs) else "🟢 ОТКРЫТЬ СЛОТ",
                 callback_data=f"adm_toggle_slot_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬ КЛИЕНТА",callback_data=f"adm_book_to_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}",callback_data=f"adm_book_to_{ds}_{tm}")],
         ]+nav_admin(f"aday_{ds}",depth=2))
         await cb.answer()
         status="🟢 Свободен" if in_s and tm not in cs else "🔴 Закрыт"
@@ -2005,7 +2010,7 @@ async def month_pick(cb: types.CallbackQuery):
             set_st(cb.from_user.id,{"step":"adm_bm_confirm","block_month":ms})
             ct="\n".join(f"  {ds}: {len(appts[ds])} записей" for ds in conf)
             kb=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ ЗАКРЫТЬ (ЗАПИСИ СОХРАНЯТСЯ)",callback_data="adm_bm_yes")],
+                [InlineKeyboardButton(text=f"{W}✅ ЗАКРЫТЬ (ЗАПИСИ СОХРАНЯТСЯ){W}",callback_data="adm_bm_yes")],
             ]+nav_admin("adm_cal",depth=1))
             await eoa(cb,f"⚠️ В {MN_RU[m-1]} {y} есть записи:\n{ct}\n\nВсё равно закрыть?",kb=kb)
         else:
@@ -2050,9 +2055,9 @@ async def adm_bw_yes(cb: types.CallbackQuery):
 async def adm_book_menu(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✏️ НОВЫЙ - БЕСПЛАТНАЯ", callback_data="adm_book_new_free")],
-        [InlineKeyboardButton(text="✏️ НОВЫЙ - ПЛАТНАЯ",    callback_data="adm_book_new_paid")],
-        [InlineKeyboardButton(text="✏️ ПОСТОЯННЫЙ",         callback_data="adm_book_reg")],
+        [InlineKeyboardButton(text=f"{W}✏️ НОВЫЙ - БЕСПЛАТНАЯ{W}", callback_data="adm_book_new_free")],
+        [InlineKeyboardButton(text=f"{W}✏️ НОВЫЙ - ПЛАТНАЯ{W}",    callback_data="adm_book_new_paid")],
+        [InlineKeyboardButton(text=f"{W}✏️ ПОСТОЯННЫЙ{W}",         callback_data="adm_book_reg")],
     ]+nav_admin("adm_back",depth=1))
     await cb.answer(); await eoa(cb,"Выбери тип записи:",kb=kb)
  
@@ -2061,7 +2066,7 @@ async def adm_book_new_free(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     await cb.answer()
     await eoa(cb,"Откуда клиент?",kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=lbl,callback_data=f"adm_src_book_{code}_free")]
+        [InlineKeyboardButton(text=f"{W}{lbl}{W}",callback_data=f"adm_src_book_{code}_free")]
         for lbl,code in SOURCES
     ]+nav_admin("adm_book_menu",depth=2)))
  
@@ -2070,7 +2075,7 @@ async def adm_book_new_paid(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     await cb.answer()
     await eoa(cb,"Откуда клиент?",kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=lbl,callback_data=f"adm_src_book_{code}_paid")]
+        [InlineKeyboardButton(text=f"{W}{lbl}{W}",callback_data=f"adm_src_book_{code}_paid")]
         for lbl,code in SOURCES
     ]+nav_admin("adm_book_menu",depth=2)))
  
@@ -2095,14 +2100,14 @@ async def adm_book_reg(cb: types.CallbackQuery):
     regs=db_get("regulars",[])
     if not regs:
         kb=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ",callback_data="manual_client_reg")],
+            [InlineKeyboardButton(text=f"{W}✏️ ВВЕСТИ ВРУЧНУЮ{W}",callback_data="manual_client_reg")],
         ]+nav_admin("adm_book_menu",depth=2))
         await cb.answer(); await eoa(cb,"Постоянных клиентов нет.",kb=kb); return
     rows=[[InlineKeyboardButton(
         text=f"👤 {r.get('name','')} @{r['username']}",
         callback_data=f"adm_reg_pick_{r['username']}")] for r in regs[:20]]
-    rows+=[[InlineKeyboardButton(text="🔍 НАЙТИ ПО ИМЕНИ",callback_data="search_client_reg")]]
-    rows+=[[InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ",callback_data="manual_client_reg")]]
+    rows+=[[InlineKeyboardButton(text=f"{W}🔍 НАЙТИ ПО ИМЕНИ{W}",callback_data="search_client_reg")]]
+    rows+=[[InlineKeyboardButton(text=f"{W}✏️ ВВЕСТИ ВРУЧНУЮ{W}",callback_data="manual_client_reg")]]
     rows+=nav_admin("adm_book_menu",depth=2)
     await cb.answer(); await eoa(cb,"Выбери постоянного клиента:",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
@@ -2179,12 +2184,12 @@ async def adm_reg_pick(cb: types.CallbackQuery):
 async def adm_analytics(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 СТАТИСТИКА",          callback_data="adm_stats")],
-        [InlineKeyboardButton(text="📊 EXCEL ОТЧЁТ",         callback_data="adm_excel")],
-        [InlineKeyboardButton(text="📋 ПРОШЕДШИЕ БЕСПЛАТНЫЕ",callback_data="adm_past_free")],
-        [InlineKeyboardButton(text="⭐️ ОТЗЫВЫ",              callback_data="adm_reviews")],
-        [InlineKeyboardButton(text="🚫 ЗАБЛОКИРОВАННЫЕ",     callback_data="adm_blocked")],
-        [InlineKeyboardButton(text="📊 ИСТОРИЯ / ЛОГИ",      callback_data="adm_logs")],
+        [InlineKeyboardButton(text=f"{W}📊 СТАТИСТИКА{W}",          callback_data="adm_stats")],
+        [InlineKeyboardButton(text=f"{W}📊 EXCEL ОТЧЁТ{W}",         callback_data="adm_excel")],
+        [InlineKeyboardButton(text=f"{W}📋 ПРОШЕДШИЕ БЕСПЛАТНЫЕ{W}",callback_data="adm_past_free")],
+        [InlineKeyboardButton(text=f"{W}⭐️ ОТЗЫВЫ{W}",              callback_data="adm_reviews")],
+        [InlineKeyboardButton(text=f"{W}🚫 ЗАБЛОКИРОВАННЫЕ{W}",     callback_data="adm_blocked")],
+        [InlineKeyboardButton(text=f"{W}📊 ИСТОРИЯ / ЛОГИ{W}",      callback_data="adm_logs")],
     ]+nav_admin("adm_back",depth=1))
     await cb.answer(); await eoa(cb,"📈 *АНАЛИТИКА*",kb=kb)
  
@@ -2223,10 +2228,10 @@ async def adm_stats(cb: types.CallbackQuery):
 async def adm_excel(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 1 ДЕНЬ",   callback_data="excel_1d")],
-        [InlineKeyboardButton(text="📅 1 НЕДЕЛЯ", callback_data="excel_1w")],
-        [InlineKeyboardButton(text="📅 1 МЕСЯЦ",  callback_data="excel_1m")],
-        [InlineKeyboardButton(text="📅 ПЕРИОД",   callback_data="excel_period")],
+        [InlineKeyboardButton(text=f"{W}📅 1 ДЕНЬ{W}",   callback_data="excel_1d")],
+        [InlineKeyboardButton(text=f"{W}📅 1 НЕДЕЛЯ{W}", callback_data="excel_1w")],
+        [InlineKeyboardButton(text=f"{W}📅 1 МЕСЯЦ{W}",  callback_data="excel_1m")],
+        [InlineKeyboardButton(text=f"{W}📅 ПЕРИОД{W}",   callback_data="excel_period")],
     ]+nav_admin("adm_analytics",depth=2))
     await cb.answer(); await eoa(cb,"Выбери период для отчёта:",kb=kb)
  
@@ -2292,7 +2297,7 @@ async def adm_blocked(cb: types.CallbackQuery):
     nav=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2))
     if not bl: await eoa(cb,"Заблокированных нет.",kb=nav); return
     kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔓 РАЗБЛОКИРОВАТЬ",callback_data="adm_unblock_ask")]
+        [InlineKeyboardButton(text=f"{W}🔓 РАЗБЛОКИРОВАТЬ{W}",callback_data="adm_unblock_ask")]
     ]+nav_admin("adm_analytics",depth=2))
     await eoa(cb,"🚫 *ЗАБЛОКИРОВАННЫЕ:*\n\n"+"\n".join(str(u) for u in bl),kb=kb)
  
@@ -2349,8 +2354,8 @@ async def adm_regulars(cb: types.CallbackQuery):
     regs=db_get("regulars",[]); text="👥 *ПОСТОЯННЫЕ КЛИЕНТЫ:*\n\n"
     text+="\n".join(f"@{r['username']} - {r['name']} | {r.get('day','')} {r.get('time','')}" for r in regs) if regs else "Нет."
     kb=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ ДОБАВИТЬ",callback_data="adm_reg_add")],
-        [InlineKeyboardButton(text="🗑 УДАЛИТЬ",  callback_data="adm_reg_del")],
+        [InlineKeyboardButton(text=f"{W}➕ ДОБАВИТЬ{W}",callback_data="adm_reg_add")],
+        [InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ{W}",  callback_data="adm_reg_del")],
     ]+nav_admin("adm_back",depth=1))
     await eoa(cb,text,kb=kb)
  
@@ -2426,8 +2431,8 @@ async def del_client_confirm(cb: types.CallbackQuery):
     else:
         uname=cb.data[11:]
         kb=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"✅ ДА, УДАЛИТЬ @{uname}",callback_data=f"del_client_yes_{uname}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНА",callback_data="adm_delete_client")],
+            [InlineKeyboardButton(text=f"{W}✅ ДА, УДАЛИТЬ @{uname}{W}",callback_data=f"del_client_yes_{uname}")],
+            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНА{W}",callback_data="adm_delete_client")],
         ])
         await cb.answer(); await eoa(cb,f"Удалить @{uname} из всех баз?",kb=kb)
  
@@ -2469,9 +2474,9 @@ async def adm_mtype(cb: types.CallbackQuery):
     if client_uid:
         link=PLATFORMS.get(plat,"")
         ck=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 ПЕРЕНЕСТИ",  callback_data=f"cli_move_{ds}_{tm}")],
-            [InlineKeyboardButton(text="❌ ОТМЕНИТЬ",   callback_data=f"cli_cancel_{ds}_{tm}")],
-            [InlineKeyboardButton(text="📅 МОИ ЗАПИСИ", callback_data="my_appts")],
+            [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",  callback_data=f"cli_move_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",   callback_data=f"cli_cancel_{ds}_{tm}")],
+            [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}", callback_data="my_appts")],
         ])
         try:
             await bot.send_message(client_uid,
@@ -2481,8 +2486,8 @@ async def adm_mtype(cb: types.CallbackQuery):
         if ctype=="paid" and dur!="—":
             price=PRICES.get(dur,5000)
             pay_kb=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 ОПЛАТА КАРТОЙ РФ / СБП",   callback_data=f"pay_ru_{client_uid}_{ds}_{tm}")],
-                [InlineKeyboardButton(text="💳 ОПЛАТА ЗАРУБЕЖНОЙ КАРТОЙ", callback_data=f"pay_intl_{client_uid}_{ds}_{tm}")],
+                [InlineKeyboardButton(text=f"{W}💳 ОПЛАТА КАРТОЙ РФ / СБП{W}",   callback_data=f"pay_ru_{client_uid}_{ds}_{tm}")],
+                [InlineKeyboardButton(text=f"{W}💳 ОПЛАТА ЗАРУБЕЖНОЙ КАРТОЙ{W}", callback_data=f"pay_intl_{client_uid}_{ds}_{tm}")],
             ])
             try: await bot.send_message(client_uid,
                     f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:",
@@ -2543,8 +2548,8 @@ async def handle_text(msg: types.Message):
         cnt=viol(uid,"bad"); await msg.answer("Пожалуйста, давайте общаться без грубостей 🙏")
         if cnt>=5: await _auto_block(uid,f"мат ({cnt}x)"); return
         bk=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚫 ЗАБЛОКИРОВАТЬ",callback_data=f"ban_{uid}")],
-            [InlineKeyboardButton(text="✅ ОСТАВИТЬ",     callback_data=f"skip_{uid}")],
+            [InlineKeyboardButton(text=f"{W}🚫 ЗАБЛОКИРОВАТЬ{W}",callback_data=f"ban_{uid}")],
+            [InlineKeyboardButton(text=f"{W}✅ ОСТАВИТЬ{W}",     callback_data=f"skip_{uid}")],
         ])
         await notify_adm(f"⚠️ *Мат* ({cnt}/5)\n@{msg.from_user.username or '?'}(ID:{uid})\n{text[:200]}",kb=bk)
         return
@@ -2554,8 +2559,8 @@ async def handle_text(msg: types.Message):
         if len(text)<35:
             st["desc"]=text; set_st(uid,st)
             bk=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✏️ ДОПОЛНИТЬ",         callback_data="desc_extend")],
-                [InlineKeyboardButton(text="✅ ОСТАВИТЬ КАК ЕСТЬ", callback_data="desc_keep")],
+                [InlineKeyboardButton(text=f"{W}✏️ ДОПОЛНИТЬ{W}",         callback_data="desc_extend")],
+                [InlineKeyboardButton(text=f"{W}✅ ОСТАВИТЬ КАК ЕСТЬ{W}", callback_data="desc_keep")],
             ])
             await msg.answer(
                 "Вижу, написал совсем немного. Если не хочешь писать - это абсолютно нормально. "
@@ -2577,7 +2582,7 @@ async def handle_text(msg: types.Message):
                 await asyncio.sleep(0.5)
                 await bot.send_message(cli_uid,"Если захочешь продолжить работу - я здесь. Вот условия:",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                        InlineKeyboardButton(text="📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ",callback_data="paid_info")
+                        InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",callback_data="paid_info")
                     ]]))
                 ft=db_get("feedback_timer",{})
                 ft[key]={"uid":cli_uid,"sent":False,"send_at":(datetime.now()+timedelta(hours=72)).isoformat()}
@@ -2630,9 +2635,9 @@ async def handle_text(msg: types.Message):
     if step=="adm_session_name":
         st["session_name"]=text; st["step"]="adm_session_type"; set_st(uid,st)
         kb=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🆓 БЕСПЛАТНАЯ ПЕРВИЧНАЯ", callback_data="stype_free_first")],
-            [InlineKeyboardButton(text="💼 ПЛАТНАЯ ПЕРВИЧНАЯ",    callback_data="stype_paid_first")],
-            [InlineKeyboardButton(text="💼 ПЛАТНАЯ ПОВТОРНАЯ",    callback_data="stype_paid_repeat")],
+            [InlineKeyboardButton(text=f"{W}🆓 БЕСПЛАТНАЯ ПЕРВИЧНАЯ{W}", callback_data="stype_free_first")],
+            [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ПЕРВИЧНАЯ{W}",    callback_data="stype_paid_first")],
+            [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ПОВТОРНАЯ{W}",    callback_data="stype_paid_repeat")],
         ])
         await msg.answer("Тип встречи?",reply_markup=kb); return
  
@@ -2662,7 +2667,7 @@ async def handle_text(msg: types.Message):
                     found[u]={"name":r.get("name","—"),"username":u,"uid":r.get("user_id",0)}
         if not found:
             await msg.answer("Не найдено.",reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✏️ ВВЕСТИ ВРУЧНУЮ",callback_data=f"manual_client_{forced}")],
+                [InlineKeyboardButton(text=f"{W}✏️ ВВЕСТИ ВРУЧНУЮ{W}",callback_data=f"manual_client_{forced}")],
             ]+nav_admin("adm_back",depth=1))); return
         rows=[[InlineKeyboardButton(
             text=f"👤 {u['name']} @{u['username']}" if u['name'] else f"👤 @{u['username']}",
