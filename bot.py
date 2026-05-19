@@ -61,7 +61,7 @@ PAYMENT_CARD_INTL = (
 # Распорка для растяжки кнопок на полный экран
 W = "\u200b" * 35
  
-CAL_HDR = CAL_HDR
+CAL_HDR = "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт"
 bot = Bot(token=TOKEN)
 dp  = Dispatcher()
 DB  = "kasikov_bot"
