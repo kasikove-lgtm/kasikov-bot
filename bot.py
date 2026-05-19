@@ -35,15 +35,28 @@ PLATFORMS = {
 }
 DURATIONS = ["30 мин","1 час","1.5 часа","2 часа","2.5 часа","3 часа"]
 BANKS     = ["Сбер","ВТБ","Альфа","Газпром","Озон"]
-SOURCES   = [("📸 Instagram","ig"),("🎵 TikTok","tt"),
-             ("▶️ YouTube","yt"),("💙 ВКонтакте","vk"),("🌐 Другой","other")]
+SOURCES   = [
+    ("📸 Instagram","ig"),
+    ("🎵 TikTok","tt"),
+    ("▶️ YouTube","yt"),
+    ("💙 ВКонтакте","vk"),
+    ("📘 Facebook","fb"),
+    ("🧵 Threads","threads"),
+    ("✈️ Telegram","tg"),
+    ("👥 Знакомый","ref"),
+    ("⭐️ Рекомендация","rec"),
+    ("🌐 Другое","other"),
+]
 PRICES = {
     "paid_first_30":3000,"30 мин":2500,"1 час":5000,
     "1.5 часа":7500,"2 часа":10000,"2.5 часа":12500,"3 часа":15000,
 }
-SRC_MAP = {"ig":"📸 Instagram","tt":"🎵 TikTok","yt":"▶️ YouTube",
-           "vk":"💙 ВКонтакте","fb":"📘 Facebook",
-           "ref":"👥 От знакомых","other":"🌐 Другое"}
+SRC_MAP = {
+    "ig":"📸 Instagram","tt":"🎵 TikTok","yt":"▶️ YouTube",
+    "vk":"💙 ВКонтакте","fb":"📘 Facebook","threads":"🧵 Threads",
+    "tg":"✈️ Telegram","ref":"👥 Знакомый","rec":"⭐️ Рекомендация",
+    "other":"🌐 Другое",
+}
  
 PAYMENT_CARD_RU = (
     "💳 *ОПЛАТА КАРТОЙ РФ / СБП*\n\n"
@@ -610,6 +623,23 @@ def kb_month_picker(action="close"):
         InlineKeyboardButton(text=f"{W}✅ ОТКРЫТЬ МЕСЯЦ{W}", callback_data="adm_open_month"),
         InlineKeyboardButton(text=f"{W}❌ ЗАКРЫТЬ МЕСЯЦ{W}", callback_data="adm_block_month"),
     ])
+    rows += nav_admin("adm_cal", depth=2)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+ 
+def slots_for_booking(ds):
+    """Все слоты для записи клиента — включая неоткрытые дни"""
+    appts = db_get("appts",{})
+    taken = {r["time"]:r for r in appts.get(ds,[])}
+    rows = []; row = []
+    for t in ALL_SLOTS:
+        if t in taken:
+            em = "🔵" if taken[t].get("confirmed") else "🟡"
+            cb_d = f"aslot_{ds}_{t}"
+        else:
+            em = "🟢"; cb_d = f"aslot_{ds}_{t}"
+        row.append(InlineKeyboardButton(text=f"{em}{t}", callback_data=cb_d))
+        if len(row) == 3: rows.append(row); row = []
+    if row: rows.append(row)
     rows += nav_admin("adm_cal", depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
@@ -1701,7 +1731,7 @@ async def aday_open(cb: types.CallbackQuery):
  
     if step in ("adm_book_date","adm_reg_from_paid"):
         st["book_ds"]=ds; st["step"]="adm_book_slot_pick"; set_st(uid,st); await cb.answer()
-        await eoa(cb,f"📅 *{fmt_date(ds)}*\nВыбери слот для записи:",kb=slots_day_admin(ds)); return
+        await eoa(cb,f"📅 *{fmt_date(ds)}*\nВыбери время для записи:",kb=slots_for_booking(ds)); return
  
     if step=="adm_excel_from":
         st["excel_from"]=ds; st["step"]="adm_excel_to"; set_st(uid,st); await cb.answer()
@@ -1712,11 +1742,14 @@ async def aday_open(cb: types.CallbackQuery):
         d_from=st.get("excel_from",""); d_to=ds; clr_st(uid); await cb.answer()
         if not EXCEL_OK: await cb.message.answer("❌ openpyxl не установлен."); return
         buf=make_excel(d_from,d_to)
+        nav_kb2 = InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics", depth=2))
         if buf:
             await cb.message.answer_document(
                 BufferedInputFile(buf.read(),filename=f"записи_{d_from}_{d_to}.xlsx"),
-                caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}")
-        else: await cb.message.answer("Записей за этот период нет.")
+                caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}",
+                reply_markup=nav_kb2)
+        else:
+            await cb.message.answer("Записей за этот период нет.", reply_markup=nav_kb2)
         return
  
     if is_past:
@@ -2045,7 +2078,15 @@ async def adm_book_new_paid(cb: types.CallbackQuery):
 async def adm_src_book(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     parts=cb.data.split("_"); code=parts[3]; forced=parts[4]
-    uid=cb.from_user.id; set_st(uid,{"forced_type":forced,"source":code}); await cb.answer()
+    uid=cb.from_user.id
+    if code == "other":
+        # Просим ввести название источника вручную
+        set_st(uid,{"forced_type":forced,"source":"other","step":"adm_src_custom"})
+        await cb.answer()
+        kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_book_new_free" if forced=="free" else "adm_book_new_paid",depth=2))
+        await eoa(cb,"Введи название источника (например: Яндекс, Авито, Конференция):",kb=kb)
+        return
+    set_st(uid,{"forced_type":forced,"source":code}); await cb.answer()
     await eoa(cb,"Выбери клиента:",kb=get_clients_kb(forced,"adm_book_new_free" if forced=="free" else "adm_book_new_paid"))
  
 @dp.callback_query(F.data=="adm_book_reg")
@@ -2199,11 +2240,14 @@ async def excel_quick(cb: types.CallbackQuery):
     await cb.answer()
     if not EXCEL_OK: await cb.message.answer("❌ openpyxl не установлен."); return
     buf=make_excel(d_from,d_to)
+    nav_kb = InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics", depth=2))
     if buf:
         await cb.message.answer_document(
             BufferedInputFile(buf.read(),filename=f"записи_{d_from}_{d_to}.xlsx"),
-            caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}")
-    else: await cb.message.answer("Записей за этот период нет.")
+            caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}",
+            reply_markup=nav_kb)
+    else:
+        await cb.message.answer("Записей за этот период нет.", reply_markup=nav_kb)
  
 @dp.callback_query(F.data=="excel_period")
 async def excel_period(cb: types.CallbackQuery):
@@ -2543,6 +2587,13 @@ async def handle_text(msg: types.Message):
                 await msg.answer("✅ Отправлено клиенту.",reply_markup=cal_admin(today.year,today.month))
             except Exception as e: await msg.answer(f"❌ Ошибка: {e}")
         clr_st(uid); return
+ 
+    if step=="adm_src_custom":
+        custom_src=text.strip(); st["source"]=custom_src; st.pop("step",None); set_st(uid,st)
+        forced=st.get("forced_type","paid")
+        await msg.answer("Выбери клиента:",
+            reply_markup=get_clients_kb(forced,"adm_book_new_free" if forced=="free" else "adm_book_new_paid"))
+        return
  
     if step=="adm_manual_tg":
         tg=text.lstrip("@"); st["manual_tg"]=tg
