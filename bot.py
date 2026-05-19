@@ -198,7 +198,11 @@ def free_slots(ds):
     closed = cs.get(ds,[])
     today  = date.today(); now = datetime.now()
     result = []
-    for t in slots.get(ds,[]):
+    # Показываем только слоты открытых дней
+    day_slots = slots.get(ds, [])
+    if not day_slots:
+        return []
+    for t in day_slots:
         if t in taken or t in closed: continue
         slot_dt = datetime.strptime(f"{ds} {t}","%Y-%m-%d %H:%M")
         # Клиенту показываем слоты только через 2 часа от текущего
@@ -650,8 +654,11 @@ def slots_day_admin(ds):
     today  = date.today(); is_past = datetime.strptime(ds,"%Y-%m-%d").date() < today
     is_bd  = ds in bd
     open_s = slots.get(ds,[]); closed_d = cs.get(ds,[])
-    all_d  = ALL_SLOTS if is_bd else sorted(set(open_s + closed_d))
     taken  = {r["time"]:r for r in appts.get(ds,[])}
+    # Всегда показываем все слоты: открытые + закрытые + с записями
+    all_d  = ALL_SLOTS if is_bd else sorted(set(open_s + closed_d + list(taken.keys())))
+    # Если день вообще пустой — показываем все слоты для удобства
+    if not all_d: all_d = ALL_SLOTS
     rows = []; row = []
     for t in all_d:
         if t in taken:
@@ -1164,7 +1171,7 @@ async def uday_sel(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("uslot_"))
 async def uslot_sel(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); ds, tm = parts[1], parts[2]
+    _, ds, tm = cb.data.split("_", 2)
     uid   = cb.from_user.id; st = get_st(uid); ctype = st.get("type","free")
     await cb.answer()
     if ctype in ("free","reschedule"):
@@ -1189,11 +1196,13 @@ async def uslot_sel(cb: types.CallbackQuery):
                 [InlineKeyboardButton(text=f"{W}⏭ ПРОПУСТИТЬ{W}", callback_data="desc_keep")],
             ])
             await cb.message.answer(
-                "Отлично, записал 👍\n\n"
-                "Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
-                "что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
-                "Если не хочешь - просто нажми ПРОПУСТИТЬ,\n"
-                "и выбери дальше платформу для видеозвонка 👇",
+        "Отлично, записал 👍\n\n"
+        "Чтобы наша встреча была для тебя максимально полезной - "
+        "по желанию напиши что сейчас происходит. "
+        "Это поможет мне подготовиться и сразу войти в суть.\n\n"
+        "Если не хочешь - просто нажми ПРОПУСТИТЬ,\n"
+        "и выбери дальше платформу для видеозвонка.\n\n"
+        "Или напиши в сообщении про свою ситуацию 👇",
                 reply_markup=skip_kb)
     else:
         st.update({"step":"duration","date":ds,"time":tm}); set_st(uid,st)
@@ -1218,10 +1227,12 @@ async def session_first(cb: types.CallbackQuery):
     ])
     await cb.message.answer(
         "Отлично, записал 👍\n\n"
-        "Чтобы наша встреча была для тебя максимально полезной - по желанию напиши коротко "
-        "что сейчас происходит. Это поможет мне подготовиться и сразу войти в суть.\n\n"
+        "Чтобы наша встреча была для тебя максимально полезной - "
+        "по желанию напиши что сейчас происходит. "
+        "Это поможет мне подготовиться и сразу войти в суть.\n\n"
         "Если не хочешь - просто нажми ПРОПУСТИТЬ,\n"
-        "и выбери дальше платформу для видеозвонка 👇",
+        "и выбери дальше платформу для видеозвонка.\n\n"
+        "Или напиши в сообщении про свою ситуацию 👇",
         reply_markup=skip_kb)
  
 @dp.callback_query(F.data == "session_repeat")
@@ -1391,7 +1402,7 @@ async def reschedule(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("cancel_"))
 async def cancel_appt(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); ds = parts[1]; tm = parts[2]; uid = cb.from_user.id
+    rest = cb.data[len("cancel_"):]; ds, tm = rest.split("_", 1); uid = cb.from_user.id
     dur = "30 мин"; appts = db_get("appts",{})
     if ds in appts:
         for r in appts[ds]:
@@ -1406,7 +1417,7 @@ async def cancel_appt(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("cli_ok_"))
 async def cli_ok(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); ds = parts[2]; tm = parts[3]
+    rest = cb.data[len("cli_ok_"):]; ds, tm = rest.split("_", 1)
     appts = db_get("appts",{})
     for r in appts.get(ds,[]):
         if r["user_id"]==cb.from_user.id and r["time"]==tm: r["cli_confirmed"] = True
@@ -1415,7 +1426,7 @@ async def cli_ok(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("cli_cancel_"))
 async def cli_cancel(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); ds = parts[2]; tm = parts[3]; uid = cb.from_user.id
+    rest = cb.data[len("cli_ok_"):]; ds, tm = rest.split("_", 1); uid = cb.from_user.id
     dur = "30 мин"; appts = db_get("appts",{})
     if ds in appts:
         for r in appts[ds]:
@@ -1437,7 +1448,7 @@ async def cli_move(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("pay_ru_"))
 async def pay_ru(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[2]); ds = parts[3]; tm = parts[4]
+    rest=cb.data[len("pay_ru_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=f"{W}✅ ОПЛАТИЛ{W}", callback_data=f"pay_ru_confirm_{uid}_{ds}_{tm}")
     ]])
@@ -1446,14 +1457,15 @@ async def pay_ru(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("pay_ru_confirm_"))
 async def pay_ru_confirm(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid = int(parts[3]); ds = parts[4]; tm = parts[5]
+    rest=cb.data[len("pay_ru_confirm_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     await cb.answer()
     await cb.message.answer(f"Выбери банк через который ты перевёл:{W}",
                              reply_markup=kb_banks(uid,ds,tm))
  
 @dp.callback_query(F.data.startswith("bank_"))
 async def bank_sel(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); bank=parts[1]; uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    # bank_{bank}_{uid}_{ds}_{tm}
+    p=cb.data.split("_",4); bank=p[1]; uid=int(p[2]); ds=p[3]; tm=p[4]
     appts = db_get("appts",{}); name="—"; dur="—"; price=5000
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
@@ -1472,7 +1484,7 @@ async def bank_sel(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_confirm_pay_"))
 async def adm_confirm_pay(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts = cb.data.split("_"); uid=int(parts[3]); ds=parts[4]; tm=parts[5]
+    rest=cb.data[len("adm_confirm_pay_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     appts = db_get("appts",{}); plat="—"; link=""; name="—"
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
@@ -1493,7 +1505,7 @@ async def adm_confirm_pay(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("pay_intl_"))
 async def pay_intl(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_ok_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}📋 ПОЛУЧИТЬ РЕКВИЗИТЫ{W}", callback_data=f"intl_req_{uid}_{ds}_{tm}")],
         [InlineKeyboardButton(text=f"{W}✅ ОПЛАТИЛ{W}",            callback_data=f"intl_paid_{uid}_{ds}_{tm}")],
@@ -1503,7 +1515,7 @@ async def pay_intl(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("intl_req_"))
 async def intl_req(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_cncl_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     await cb.answer("✅ Запрос отправлен Евгению")
     await cb.message.answer("✅ Евгений получил твой запрос и пришлёт реквизиты в ближайшее время.")
     appts = db_get("appts",{}); name="—"
@@ -1516,7 +1528,7 @@ async def intl_req(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("intl_paid_"))
 async def intl_paid(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_mv_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     appts = db_get("appts",{}); name="—"; dur="—"; price=5000
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
@@ -1534,7 +1546,7 @@ async def intl_paid(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("adm_ok_"))
 async def adm_ok(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_ok_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     appts = db_get("appts",{}); plat="—"; link=""
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
@@ -1568,7 +1580,7 @@ async def adm_ok(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("adm_cncl_"))
 async def adm_cncl(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_cncl_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     dur="30 мин"; appts=db_get("appts",{})
     if ds in appts:
         for r in appts[ds]:
@@ -1585,14 +1597,15 @@ async def adm_cncl(cb: types.CallbackQuery):
  
 @dp.callback_query(F.data.startswith("adm_mv_"))
 async def adm_mv(cb: types.CallbackQuery):
-    parts = cb.data.split("_"); uid=int(parts[2]); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_mv_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     set_st(cb.from_user.id,{"step":"adm_move_new_date","move_uid":uid,"move_ds":ds,"move_tm":tm})
     today=date.today(); await cb.answer()
     await eoa(cb,"Выбери новую дату для переноса:",kb=cal_admin(today.year,today.month))
  
 @dp.callback_query(F.data.startswith("sess_"))
 async def sess_result(cb: types.CallbackQuery):
-    parts=cb.data.split("_"); result=parts[1]; stype=parts[2]; ds=parts[3]; tm=parts[4]
+    # "sess_{result}_{stype}_{ds}_{tm}"
+    p=cb.data.split("_",4); result=p[1]; stype=p[2]; ds=p[3]; tm=p[4]
     appts=db_get("appts",{})
     rec=next((r for r in appts.get(ds,[]) if r["time"]==tm),None)
     name=rec.get("name","—") if rec else "—"
@@ -1770,7 +1783,7 @@ async def aday_open(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_bulk_open_"))
 async def adm_bulk_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[14:]
+    ds = cb.data[len("adm_bulk_open_"):]
     set_st(cb.from_user.id, {"step":"adm_bulk_pick","bulk_ds":ds,"bulk_mode":"open"})
     await cb.answer("Нажми на слот для открытия")
     # Просто обновляем слоты — клик на слот обработается через adm_toggle_slot
@@ -1778,14 +1791,14 @@ async def adm_bulk_open(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_bulk_close_"))
 async def adm_bulk_close(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds = cb.data[15:]
+    ds = cb.data[len("adm_bulk_close_"):]
     set_st(cb.from_user.id, {"step":"adm_bulk_pick","bulk_ds":ds,"bulk_mode":"close"})
     await cb.answer("Нажми на слот для закрытия")
  
 @dp.callback_query(F.data.startswith("adm_full_open_"))
 async def adm_full_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds=cb.data[14:]
+    ds=cb.data[len("adm_full_open_"):]
     slots=db_get("slots",{}); slots[ds]=ALL_SLOTS.copy(); db_set("slots",slots)
     bd=db_get("blocked_dates",[])
     if ds in bd: bd.remove(ds); db_set("blocked_dates",bd)
@@ -1797,7 +1810,7 @@ async def adm_full_open(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_full_close_"))
 async def adm_full_close(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds=cb.data[15:]
+    ds=cb.data[len("adm_full_close_"):]
     bd=db_get("blocked_dates",[])
     if ds not in bd: bd.append(ds); db_set("blocked_dates",bd)
     slots=db_get("slots",{})
@@ -1808,7 +1821,9 @@ async def adm_full_close(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("aslot_blocked_"))
 async def aslot_blocked_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts=cb.data.split("_"); ds=parts[2]; tm=parts[3]
+    # "aslot_blocked_{ds}_{tm}"
+    rest = cb.data[len("aslot_blocked_"):]
+    ds, tm = rest.split("_", 1)
     uid=cb.from_user.id; st=get_st(uid)
     if st.get("manual_tg") and st.get("step")=="adm_book_slot_pick":
         st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st); await cb.answer()
@@ -1824,7 +1839,8 @@ async def aslot_blocked_open(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_unblock_slot_"))
 async def adm_unblock_slot(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    rest = cb.data[len("adm_unblock_slot_"):]
+    ds, tm = rest.split("_", 1)
     slots=db_get("slots",{}); cs=db_get("closed_slots",{}); bd=db_get("blocked_dates",[])
     if ds not in slots: slots[ds]=[]
     if tm not in slots[ds]: slots[ds].append(tm); slots[ds]=sorted(slots[ds])
@@ -1837,7 +1853,7 @@ async def adm_unblock_slot(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("aslot_"))
 async def aslot_open(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts=cb.data.split("_"); ds=parts[1]; tm=parts[2]
+    _, ds, tm = cb.data.split("_", 2)
     uid=cb.from_user.id; st=get_st(uid); appts=db_get("appts",{})
     if st.get("step")=="adm_book_slot_pick":
         st["book_tm"]=tm; st["step"]="adm_manual_plat"; set_st(uid,st); await cb.answer()
@@ -1888,7 +1904,9 @@ async def aslot_open(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_toggle_slot_"))
 async def adm_toggle_slot(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    # "adm_toggle_slot_{ds}_{tm}"
+    rest = cb.data[len("adm_toggle_slot_"):]
+    ds, tm = rest.split("_", 1)
     slots=db_get("slots",{}); cs=db_get("closed_slots",{})
     if ds not in slots: slots[ds]=[]
     if ds not in cs: cs[ds]=[]
@@ -1905,7 +1923,7 @@ async def adm_toggle_slot(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_book_to_"))
 async def adm_book_to(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_book_to_"):]; ds,tm=rest.split("_",1)
     uid=cb.from_user.id
     # Сохраняем дату и слот, показываем меню выбора типа записи
     set_st(uid,{"book_ds":ds,"book_tm":tm}); await cb.answer()
@@ -1919,7 +1937,7 @@ async def adm_book_to(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_book_blocked_"))
 async def adm_book_blocked(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    parts=cb.data.split("_"); ds=parts[3]; tm=parts[4]
+    rest=cb.data[len("adm_book_blocked_"):]; ds,tm=rest.split("_",1)
     uid=cb.from_user.id
     set_st(uid,{"book_ds":ds,"book_tm":tm}); await cb.answer()
     kb=InlineKeyboardMarkup(inline_keyboard=[
@@ -1932,14 +1950,14 @@ async def adm_book_blocked(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_add_slots_"))
 async def adm_add_slots(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds=cb.data[14:]
+    ds=cb.data[len("adm_add_slots_"):]
     set_st(cb.from_user.id,{"step":"adm_add_slots_to","adm_date":ds}); await cb.answer()
     await eoa(cb,f"Слоты для *{fmt_date(ds)}* через запятую:\n`10:00, 11:00`",kb=InlineKeyboardMarkup(inline_keyboard=nav_admin(f"aday_{ds}",depth=2)))
  
 @dp.callback_query(F.data.startswith("adm_book_slot_"))
 async def adm_book_slot_btn(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds=cb.data[14:]; uid=cb.from_user.id; st=get_st(uid)
+    ds=cb.data[len("adm_book_slot_"):]; uid=cb.from_user.id; st=get_st(uid)
     if st.get("manual_tg"):
         st["book_ds"]=ds; st["step"]="adm_book_slot_pick"; set_st(uid,st); await cb.answer()
         await eoa(cb,f"📅 *{fmt_date(ds)}*\nВыбери слот:",kb=slots_day_admin(ds))
@@ -1950,7 +1968,7 @@ async def adm_book_slot_btn(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("adm_add_session_"))
 async def adm_add_session(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    ds=cb.data[16:]
+    ds=cb.data[len("adm_add_session_"):]
     set_st(cb.from_user.id,{"step":"adm_session_name","session_ds":ds}); await cb.answer()
     await eoa(cb,f"Добавляю сессию за *{fmt_date(ds)}*.\nВведи имя клиента:",kb=InlineKeyboardMarkup(inline_keyboard=nav_admin(f"aday_{ds}",depth=2)))
  
