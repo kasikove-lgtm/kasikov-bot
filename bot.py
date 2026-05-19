@@ -660,19 +660,18 @@ def slots_day_admin(ds):
     # Если день вообще пустой — показываем все слоты для удобства
     if not all_d: all_d = ALL_SLOTS
     now_dt = datetime.now()
+    is_today = datetime.strptime(ds, "%Y-%m-%d").date() == today
     rows = []; row = []
     for t in all_d:
-        # Для сегодняшнего дня — скрываем прошедшие слоты (только в клиентском меню)
-        # В админке показываем все слоты но серым если прошли
         slot_dt = datetime.strptime(f"{ds} {t}", "%Y-%m-%d %H:%M")
-        is_today_slot = datetime.strptime(ds, "%Y-%m-%d").date() == today
-        is_past_slot  = is_today_slot and slot_dt <= now_dt
+        is_past_slot = is_today and slot_dt <= now_dt
+        # В админке скрываем прошедшие слоты сегодняшнего дня (если нет записи)
+        if is_past_slot and t not in taken:
+            continue
         if t in taken:
             em = "🔵" if taken[t].get("confirmed") else "🟡"; cb = f"aslot_{ds}_{t}"
         elif t in closed_d or is_bd:
             em = "🔴"; cb = f"aslot_blocked_{ds}_{t}"
-        elif is_past_slot:
-            em = "⚫️"; cb = f"aslot_{ds}_{t}"  # прошедший слот
         else:
             em = "🟢"; cb = f"aslot_{ds}_{t}"
         row.append(InlineKeyboardButton(text=f"{W}{em}{t}{W}", callback_data=cb))
