@@ -1446,7 +1446,7 @@ async def cli_move(cb: types.CallbackQuery):
         reply_markup=cal_user(today.year, today.month, back_cb="my_appts"))
     await notify_adm(f"🔄 Клиент хочет перенести\n🆔 @{cb.from_user.username or 'нет'}")
  
-@dp.callback_query(F.data.startswith("pay_ru_"))
+@dp.callback_query(F.data.startswith("pay_ru_") & ~F.data.startswith("pay_ru_confirm_"))
 async def pay_ru(cb: types.CallbackQuery):
     rest=cb.data[len("pay_ru_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -2427,7 +2427,7 @@ async def adm_delete_client(cb: types.CallbackQuery):
     rows+=nav_admin("adm_back",depth=1)
     await cb.answer(); await eoa(cb,"Выбери клиента для удаления:",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
-@dp.callback_query(F.data.startswith("del_client_"))
+@dp.callback_query(F.data.startswith("del_client_") & ~F.data.startswith("del_client_yes_"))
 async def del_client_confirm(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
     if cb.data.startswith("del_client_yes_"):
