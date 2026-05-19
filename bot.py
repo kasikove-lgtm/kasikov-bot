@@ -440,7 +440,7 @@ T_FREE1 = """Решиться на первый шаг бывает непрос
  
 После встречи получишь письменный разбор с конкретными темами и рекомендациями. Он останется с тобой - независимо от того, решишь ли продолжать работу со мной."""
  
-T_FREE2 = "Работаю по видео - ВКонтакте, Zoom, Яндекс Телемост, Google Meet, Teams, MAX.\n\nНайди тихое место где тебя не будут отвлекать - это важно для разговора.\n\nВыбери удобную дату 👇\n✅ - есть свободные слоты"
+T_FREE2 = "Работаю по видео - ВКонтакте, Zoom, Яндекс Телемост, Google Meet, Teams, MAX.\n\nНайди тихое место где тебя не будут отвлекать - это важно для разговора.\n\nВыбери удобную дату 👇\nНажми на нужный день - потом выберешь время.\n✅ - есть свободные слоты"
  
 T_FEEDBACK = """Независимо от того, будешь ли ты работать со мной дальше - хочу попросить короткую обратную связь по нашей первой сессии.
  
@@ -659,12 +659,20 @@ def slots_day_admin(ds):
     all_d  = ALL_SLOTS if is_bd else sorted(set(open_s + closed_d + list(taken.keys())))
     # Если день вообще пустой — показываем все слоты для удобства
     if not all_d: all_d = ALL_SLOTS
+    now_dt = datetime.now()
     rows = []; row = []
     for t in all_d:
+        # Для сегодняшнего дня — скрываем прошедшие слоты (только в клиентском меню)
+        # В админке показываем все слоты но серым если прошли
+        slot_dt = datetime.strptime(f"{ds} {t}", "%Y-%m-%d %H:%M")
+        is_today_slot = datetime.strptime(ds, "%Y-%m-%d").date() == today
+        is_past_slot  = is_today_slot and slot_dt <= now_dt
         if t in taken:
             em = "🔵" if taken[t].get("confirmed") else "🟡"; cb = f"aslot_{ds}_{t}"
         elif t in closed_d or is_bd:
             em = "🔴"; cb = f"aslot_blocked_{ds}_{t}"
+        elif is_past_slot:
+            em = "⚫️"; cb = f"aslot_{ds}_{t}"  # прошедший слот
         else:
             em = "🟢"; cb = f"aslot_{ds}_{t}"
         row.append(InlineKeyboardButton(text=f"{W}{em}{t}{W}", callback_data=cb))
@@ -871,7 +879,7 @@ async def bg_loop():
                                 [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}",   callback_data=f"cli_move_{ds}_{rec['time']}")],
                             ])
                             await bot.send_message(rec["user_id"],
-                                "Ты ещё не подтвердил участие. Всё в силе? 😊", reply_markup=kb)
+                                f"Ты ещё не подтвердил участие. Всё в силе? 😊{W}", reply_markup=kb)
                         except: pass
  
                     dm2 = {"30 мин":30,"1 час":60,"1.5 часа":90,"2 часа":120,"2.5 часа":150,"3 часа":180}.get(rec.get("duration","30 мин"),30)
@@ -1004,7 +1012,7 @@ async def cmd_handler(msg: types.Message):
  
     is_adm = is_admin(msg.from_user.username)
     await msg.answer(
-        "Хорошо что решил зайти. Это уже первый шаг.\n\nВыбери с чего начнём 👇",
+        f"Хорошо что решил зайти. Это уже первый шаг.\n\nВыбери с чего начнём 👇{W}",
         reply_markup=kb_main(is_adm=is_adm))
  
 @dp.callback_query(F.data == "noop")
@@ -1018,7 +1026,7 @@ async def slot_taken(cb): await cb.answer("Это время занято 🔴",
 async def go_main(cb: types.CallbackQuery):
     await cb.answer()
     is_adm = is_admin(cb.from_user.username)
-    await cb.message.answer("🏠 Главное меню:", reply_markup=kb_main(is_adm=is_adm))
+    await cb.message.answer(f"🏠 Главное меню:{W}", reply_markup=kb_main(is_adm=is_adm))
  
 @dp.callback_query(F.data == "adm_back")
 async def adm_back(cb: types.CallbackQuery):
@@ -1148,7 +1156,9 @@ async def book_paid(cb: types.CallbackQuery):
     set_st(cb.from_user.id, {"type":"paid","cal_back":"paid_info"})
     today = date.today()
     await cb.message.answer(
-        f"Выбери удобную дату 👇\n✅ - есть свободные слоты{W}",
+        f"Выбери удобную дату 👇\n"
+        "Нажми на нужный день - потом выберешь время.\n"
+        f"✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month, back_cb="paid_info"))
  
 @dp.callback_query(F.data.startswith("ucal_"))
@@ -1166,8 +1176,8 @@ async def uday_sel(cb: types.CallbackQuery):
         await cb.answer("У тебя уже есть запись на этот день.", show_alert=True); return
     st["date"] = ds; set_st(uid,st); await cb.answer()
     await cb.message.answer(
-        f"📅 *{fmt_date(ds)}*\n\nВыбери время:\n🟢 свободно  🔴 занято{W}",
-        parse_mode="Markdown", reply_markup=slots_menu_user(ds))
+        f"📅 {fmt_date(ds)}\nВремя по МСК\n\nВыбери время для записи:{W}",
+        reply_markup=slots_menu_user(ds))
  
 @dp.callback_query(F.data.startswith("uslot_"))
 async def uslot_sel(cb: types.CallbackQuery):
@@ -1290,7 +1300,9 @@ async def reschedule_full(cb: types.CallbackQuery):
     uid2 = cb.from_user.id; st2 = get_st(uid2)
     back2 = st2.get("cal_back","main")
     await cb.message.answer(
-        f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
+        f"Выбери новую дату 👇\n"
+        "Нажми на нужный день - потом выберешь время.\n"
+        f"✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month, back_cb=back2))
  
 @dp.callback_query(F.data.startswith("confirm_"))
@@ -1345,7 +1357,7 @@ async def confirm_book(cb: types.CallbackQuery):
             [InlineKeyboardButton(text=f"{W}💳 ОПЛАТА ЗАРУБЕЖНОЙ КАРТОЙ{W}", callback_data=f"pay_intl_{uid}_{ds}_{tm}")],
         ])
         await bot.send_message(uid,
-            f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:",
+            f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:{W}",
             parse_mode="Markdown", reply_markup=pay_kb)
  
 @dp.callback_query(F.data == "my_appts")
@@ -1363,10 +1375,10 @@ async def my_appts(cb: types.CallbackQuery):
                 callback_data=f"my_rec_{ds}_{r['time']}")])
     rows += nav_client("main", depth=2)
     if len(rows) == 2:
-        await cb.message.answer("У тебя нет предстоящих записей.",
+        await cb.message.answer(f"У тебя нет предстоящих записей.{W}",
                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     else:
-        await cb.message.answer("📅 *Твои записи:*", parse_mode="Markdown",
+        await cb.message.answer(f"📅 *Твои записи:*{W}", parse_mode="Markdown",
                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data.startswith("my_rec_"))
@@ -1381,23 +1393,31 @@ async def my_rec(cb: types.CallbackQuery):
 @dp.callback_query(F.data == "reschedule")
 async def reschedule(cb: types.CallbackQuery):
     uid = cb.from_user.id
-    # Находим текущую запись клиента чтобы взять платформу
     appts = db_get("appts",{}); today_d = date.today()
-    old_plat = ""; old_type = "free"
-    for ds, recs in appts.items():
+    old_plat = ""; old_type = "free"; old_ds = ""; old_tm = ""; old_dur = "30 мин"
+    # Находим и СРАЗУ удаляем старую запись
+    for ds, recs in list(appts.items()):
         try: d = datetime.strptime(ds,"%Y-%m-%d").date()
         except: continue
         if d < today_d: continue
         for r in recs:
             if r.get("user_id") == uid:
                 old_plat = r.get("platform",""); old_type = r.get("type","free")
+                old_ds = ds; old_tm = r.get("time",""); old_dur = r.get("duration","30 мин")
                 break
-        if old_plat: break
+        if old_ds: break
+    if old_ds:
+        appts[old_ds] = [r for r in appts.get(old_ds,[]) if r.get("user_id") != uid]
+        db_set("appts", appts)
+        _block_adj(old_ds, old_tm, old_dur, unblock=True)
+        await notify_adm(f"🔄 Клиент переносит запись\n📅 {fmt_date(old_ds)} в {old_tm}\n🆔 @{cb.from_user.username or chr(39)+chr(39)}")
     set_st(uid, {"type":"reschedule","platform":old_plat,"ctype":old_type,
                  "skip_desc":True,"skip_platform":True})
     today = date.today(); await cb.answer()
     await cb.message.answer(
-        f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
+        f"Выбери новую дату 👇\n"
+        "Нажми на нужный день - потом выберешь время.\n"
+        f"✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month, back_cb="my_appts"))
  
 @dp.callback_query(F.data.startswith("cancel_"))
@@ -1411,7 +1431,7 @@ async def cancel_appt(cb: types.CallbackQuery):
         db_set("appts",appts)
     _block_adj(ds,tm,dur,unblock=True)
     is_adm = is_admin(cb.from_user.username)
-    await cb.message.answer("✅ Запись отменена. Если захочешь записаться снова - я здесь.",
+    await cb.message.answer(f"✅ Запись отменена. Если захочешь записаться снова - я здесь.{W}",
                              reply_markup=kb_main(is_adm=is_adm))
     await notify_adm(f"❌ Клиент отменил запись\n📅 {fmt_date(ds)} в {tm}\n🆔 @{cb.from_user.username or 'нет'}")
  
@@ -1435,16 +1455,37 @@ async def cli_cancel(cb: types.CallbackQuery):
         db_set("appts",appts)
     _block_adj(ds,tm,dur,unblock=True); await cb.answer()
     is_adm = is_admin(cb.from_user.username)
-    await cb.message.answer("Запись отменена.", reply_markup=kb_main(is_adm=is_adm))
+    await cb.message.answer(f"Запись отменена.{W}", reply_markup=kb_main(is_adm=is_adm))
     await notify_adm(f"❌ Клиент отменил перед встречей\n📅 {fmt_date(ds)} в {tm}\n🆔 @{cb.from_user.username or 'нет'}")
  
 @dp.callback_query(F.data.startswith("cli_move_"))
 async def cli_move(cb: types.CallbackQuery):
-    set_st(cb.from_user.id,{"type":"reschedule"}); today = date.today(); await cb.answer()
+    uid = cb.from_user.id
+    appts = db_get("appts",{}); today_d = date.today()
+    old_plat = ""; old_ds = ""; old_tm = ""; old_dur = "30 мин"; old_type = "free"
+    for ds, recs in list(appts.items()):
+        try: d = datetime.strptime(ds,"%Y-%m-%d").date()
+        except: continue
+        if d < today_d: continue
+        for r in recs:
+            if r.get("user_id") == uid:
+                old_plat = r.get("platform",""); old_type = r.get("type","free")
+                old_ds = ds; old_tm = r.get("time",""); old_dur = r.get("duration","30 мин")
+                break
+        if old_ds: break
+    if old_ds:
+        appts[old_ds] = [r for r in appts.get(old_ds,[]) if r.get("user_id") != uid]
+        db_set("appts", appts)
+        _block_adj(old_ds, old_tm, old_dur, unblock=True)
+    set_st(uid, {"type":"reschedule","platform":old_plat,"ctype":old_type,
+                 "skip_desc":True,"skip_platform":True})
+    today = date.today(); await cb.answer()
     await cb.message.answer(
-        f"Выбери новую дату 👇\n✅ - есть свободные слоты{W}",
+        f"Выбери новую дату 👇\n"
+        "Нажми на нужный день - потом выберешь время.\n"
+        f"✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month, back_cb="my_appts"))
-    await notify_adm(f"🔄 Клиент хочет перенести\n🆔 @{cb.from_user.username or 'нет'}")
+    await notify_adm(f"🔄 Клиент переносит запись\n🆔 @{cb.from_user.username or 'нет'}")
  
 @dp.callback_query(F.data.startswith("pay_ru_") & ~F.data.startswith("pay_ru_confirm_"))
 async def pay_ru(cb: types.CallbackQuery):
@@ -1589,7 +1630,7 @@ async def adm_cncl(cb: types.CallbackQuery):
         db_set("appts",appts)
     _block_adj(ds,tm,dur,unblock=True)
     try:
-        await bot.send_message(uid,"❌ К сожалению, это время не получится.\nДля новой записи нажми кнопку ниже:",
+        await bot.send_message(uid,f"❌ К сожалению, это время не получится.\nДля новой записи нажми кнопку ниже:{W}",
                                reply_markup=kb_main())
     except: pass
     await cb.answer("❌ Запись отменена")
@@ -1767,7 +1808,7 @@ async def aday_open(cb: types.CallbackQuery):
                 caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}",
                 reply_markup=nav_kb2)
         else:
-            await cb.message.answer("Записей за этот период нет.", reply_markup=nav_kb2)
+            await cb.message.answer(f"Записей за этот период нет.{W}", reply_markup=nav_kb2)
         return
  
     if is_past:
@@ -2270,7 +2311,7 @@ async def excel_quick(cb: types.CallbackQuery):
             caption=f"📊 Записи с {fmt_date(d_from)} по {fmt_date(d_to)}",
             reply_markup=nav_kb)
     else:
-        await cb.message.answer("Записей за этот период нет.", reply_markup=nav_kb)
+        await cb.message.answer(f"Записей за этот период нет.{W}", reply_markup=nav_kb)
  
 @dp.callback_query(F.data=="excel_period")
 async def excel_period(cb: types.CallbackQuery):
@@ -2508,7 +2549,7 @@ async def adm_mtype(cb: types.CallbackQuery):
                 [InlineKeyboardButton(text=f"{W}💳 ОПЛАТА ЗАРУБЕЖНОЙ КАРТОЙ{W}", callback_data=f"pay_intl_{client_uid}_{ds}_{tm}")],
             ])
             try: await bot.send_message(client_uid,
-                    f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:",
+                    f"💰 *Стоимость встречи: {price:,} руб.*\n\nВыбери способ оплаты:{W}",
                     parse_mode="Markdown",reply_markup=pay_kb)
             except: pass
     else:
@@ -2558,7 +2599,7 @@ async def handle_text(msg: types.Message):
     reg_user(uid,msg.from_user.username,msg.from_user.first_name)
     if text.startswith("/"):
         clr_st(uid); is_adm=is_admin(msg.from_user.username)
-        await msg.answer("🏠 Главное меню:",reply_markup=kb_main(is_adm=is_adm)); return
+        await msg.answer(f"🏠 Главное меню:{W}",reply_markup=kb_main(is_adm=is_adm)); return
     if is_admin(msg.from_user.username):
         chats=db_get("admin_chats",[])
         if uid not in chats: chats.append(uid); db_set("admin_chats",chats)
@@ -2575,16 +2616,28 @@ async def handle_text(msg: types.Message):
  
     if step in ("desc","desc_retry"):
         if len(text)<35:
-            st["desc"]=text; set_st(uid,st)
+            # Накапливаем текст
+            prev = st.get("desc","")
+            st["desc"] = (prev + " " + text).strip() if prev else text
+            set_st(uid,st)
+            # Если уже был desc_retry — больше не спрашиваем, сразу к платформе
+            if step=="desc_retry":
+                st["step"]="platform"; set_st(uid,st)
+                await msg.answer(
+                    f"Окей, разберёмся на месте. Теперь выбери платформу 👇{W}",
+                    reply_markup=kb_platform("free",depth=3)); return
             bk=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"{W}✏️ ДОПОЛНИТЬ{W}",         callback_data="desc_extend")],
                 [InlineKeyboardButton(text=f"{W}✅ ОСТАВИТЬ КАК ЕСТЬ{W}", callback_data="desc_keep")],
             ])
             await msg.answer(
-                "Вижу, написал совсем немного. Если не хочешь писать - это абсолютно нормально. "
+                f"Вижу, написал совсем немного. Если не хочешь писать - это абсолютно нормально. {W}"
                 "Если случайно отправил - можешь дополнить.",reply_markup=bk); return
         name=msg.from_user.first_name or "Клиент"
-        st["name"]=name; st["desc"]=text; st["step"]="platform"; set_st(uid,st)
+        # Накапливаем с предыдущим если было
+        prev = st.get("desc","")
+        full_desc = (prev + " " + text).strip() if prev else text
+        st["name"]=name; st["desc"]=full_desc; st["step"]="platform"; set_st(uid,st)
         await msg.answer(f"Через что созвонимся? Выбери удобный вариант 👇{W}",
                          reply_markup=kb_platform("free",depth=3)); return
  
@@ -2598,7 +2651,7 @@ async def handle_text(msg: types.Message):
                     f"Привет, {cname}!\n\nКак ты после нашей встречи? Надеюсь, стало немного яснее.\n\n"
                     f"Как обещал - обратная связь и план работы.\n\n{text}")
                 await asyncio.sleep(0.5)
-                await bot.send_message(cli_uid,"Если захочешь продолжить работу - я здесь. Вот условия:",
+                await bot.send_message(cli_uid,f"Если захочешь продолжить работу - я здесь. Вот условия:{W}",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                         InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬСЯ НА ПЛАТНУЮ{W}",callback_data="paid_info")
                     ]]))
@@ -2742,7 +2795,7 @@ async def handle_text(msg: types.Message):
  
     log_act(uid,msg.from_user.username,f"msg:{text[:30]}")
     is_adm=is_admin(msg.from_user.username)
-    await msg.answer("Выбери действие:",reply_markup=kb_main(is_adm=is_adm))
+    await msg.answer(f"Выбери действие:{W}",reply_markup=kb_main(is_adm=is_adm))
  
  
 async def main():
@@ -2756,3 +2809,4 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
+ 
