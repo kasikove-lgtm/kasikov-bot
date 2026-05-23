@@ -72,7 +72,7 @@ PAYMENT_CARD_INTL = (
 )
  
 # Распорка для растяжки кнопок на полный экран
-W = "\u200b" * 35
+W = "\u200b" * 20
 def now_msk():
     """Текущее время по Москве (UTC+3)"""
     from datetime import timezone, timedelta as td
@@ -2935,3 +2935,4 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
+ 
