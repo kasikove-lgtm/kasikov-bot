@@ -133,7 +133,7 @@ def is_admin(u): return bool(u) and u.lower() in [a.lower() for a in ADMINS]
 async def _auto_block(uid, reason):
     bl = db_get("blocked",[])
     if uid not in bl: bl.append(uid); db_set("blocked",bl)
-    await notify_adm(f"🚫 *Автоблок*\nID: {uid}\nПричина: {reason}")
+    await notify_adm(f"🚫 *Автоблок*\nID: {uid}\nПричина: {reason}", kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
  
 def reg_user(uid, username=None, first_name=None):
     u = db_get("users",[])
@@ -607,6 +607,7 @@ def cal_admin(year, month):
     ])
     rows.append([InlineKeyboardButton(text=f"{W}👥 ПОСТОЯННЫЕ КЛИЕНТЫ{W}",  callback_data="adm_regulars")])
     rows.append([InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ КЛИЕНТА{W}",      callback_data="adm_delete_client")])
+    rows.append([InlineKeyboardButton(text=f"{W}🏠 МЕНЮ КЛИЕНТА{W}",          callback_data="main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_month_picker(action="close"):
@@ -1497,7 +1498,7 @@ async def reschedule(cb: types.CallbackQuery):
         appts[old_ds] = [r for r in appts.get(old_ds,[]) if r.get("user_id") != uid]
         db_set("appts", appts)
         _block_adj(old_ds, old_tm, old_dur, unblock=True)
-        await notify_adm(f"🔄 Клиент переносит запись\n📅 {fmt_date(old_ds)} в {old_tm}\n🆔 @{cb.from_user.username or chr(39)+chr(39)}")
+        await notify_adm(f"🔄 Клиент переносит запись\n📅 {fmt_date(old_ds)} в {old_tm}\n🆔 @{cb.from_user.username or chr(39)+chr(39)}", kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
     set_st(uid, {"type":"reschedule","platform":old_plat,"ctype":old_type,
                  "skip_desc":True,"skip_platform":True})
     today = date.today(); await cb.answer()
@@ -1520,7 +1521,7 @@ async def cancel_appt(cb: types.CallbackQuery):
     is_adm = is_admin(cb.from_user.username)
     await cb.message.answer(f"✅ Запись отменена. Если захочешь записаться снова - я здесь.{W}",
                              reply_markup=kb_main(is_adm=is_adm))
-    await notify_adm(f"❌ Клиент отменил запись\n📅 {fmt_date(ds)} в {tm}\n🆔 @{cb.from_user.username or 'нет'}")
+    await notify_adm(f"❌ Клиент отменил запись\n📅 {fmt_date(ds)} в {tm}\n🆔 @{cb.from_user.username or 'нет'}", kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
  
 @dp.callback_query(F.data.startswith("cli_ok_"))
 async def cli_ok(cb: types.CallbackQuery):
@@ -1529,7 +1530,7 @@ async def cli_ok(cb: types.CallbackQuery):
     for r in appts.get(ds,[]):
         if r["user_id"]==cb.from_user.id and r["time"]==tm: r["cli_confirmed"] = True
     db_set("appts",appts); await cb.answer("✅ Отлично! Ждём тебя!")
-    await notify_adm(f"✅ {cb.from_user.first_name} подтвердил участие\n📅 {fmt_date(ds)} в {tm}")
+    await notify_adm(f"✅ {cb.from_user.first_name} подтвердил участие\n📅 {fmt_date(ds)} в {tm}", kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
  
 @dp.callback_query(F.data.startswith("cli_cancel_"))
 async def cli_cancel(cb: types.CallbackQuery):
@@ -1543,7 +1544,7 @@ async def cli_cancel(cb: types.CallbackQuery):
     _block_adj(ds,tm,dur,unblock=True); await cb.answer()
     is_adm = is_admin(cb.from_user.username)
     await cb.message.answer(f"Запись отменена.{W}", reply_markup=kb_main(is_adm=is_adm))
-    await notify_adm(f"❌ Клиент отменил перед встречей\n📅 {fmt_date(ds)} в {tm}\n🆔 @{cb.from_user.username or 'нет'}")
+    await notify_adm(f"❌ Клиент отменил перед встречей\n📅 {fmt_date(ds)} в {tm}\n🆔 @{cb.from_user.username or 'нет'}", kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
  
 @dp.callback_query(F.data.startswith("cli_move_"))
 async def cli_move(cb: types.CallbackQuery):
@@ -1572,7 +1573,7 @@ async def cli_move(cb: types.CallbackQuery):
         "Нажми на нужный день - потом выберешь время.\n"
         f"✅ - есть свободные слоты{W}",
         reply_markup=cal_user(today.year, today.month, back_cb="my_appts"))
-    await notify_adm(f"🔄 Клиент переносит запись\n🆔 @{cb.from_user.username or 'нет'}")
+    await notify_adm(f"🔄 Клиент переносит запись\n🆔 @{cb.from_user.username or 'нет'}", kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
  
 @dp.callback_query(F.data.startswith("pay_ru_") & ~F.data.startswith("pay_ru_confirm_"))
 async def pay_ru(cb: types.CallbackQuery):
@@ -1652,7 +1653,8 @@ async def intl_req(cb: types.CallbackQuery):
     await notify_adm(
         f"💳 *Запрос реквизитов зарубежной карты*\n\n👤 {name}\n"
         f"🆔 @{cb.from_user.username or '—'} | ID: {uid}\n"
-        f"📅 {fmt_date(ds)} в {tm} МСК\n\nОтправь реквизиты клиенту в личку.")
+        f"📅 {fmt_date(ds)} в {tm} МСК\n\nОтправь реквизиты клиенту в личку.",
+        kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
  
 @dp.callback_query(F.data.startswith("intl_paid_"))
 async def intl_paid(cb: types.CallbackQuery):
@@ -1753,7 +1755,7 @@ async def sess_result(cb: types.CallbackQuery):
             kb=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"{W}📋 СКОПИРОВАТЬ (ПОСТОЯННЫЙ){W}",callback_data=f"reg_copy_{ds}_{tm}")],
                 [InlineKeyboardButton(text=f"{W}➕ НОВАЯ ЗАПИСЬ (ПОСТОЯННЫЙ){W}",callback_data=f"reg_new_{ds}_{tm}")],
-            ]+nav_admin("adm_back",depth=1))
+            ]+nav_admin("adm_back",depth=2))
             await eoa(cb,
                 f"✅ Платная встреча записана.\n\n📅 {fmt_date(ds)} в {tm}\n💼 | ⏱ {dur}\n"
                 f"👤 {name}\n🆔 @{uname}",kb=kb)
@@ -1862,7 +1864,7 @@ async def aday_open(cb: types.CallbackQuery):
             ct="\n".join(f"  {d}: {len(appts[d])} записей" for d in conflicts)
             kb=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"{W}✅ ЗАБЛОКИРОВАТЬ (ЗАПИСИ СОХРАНЯТСЯ){W}",callback_data="adm_bw_yes")],
-            ]+nav_admin("adm_cal",depth=1))
+            ]+nav_admin("adm_cal",depth=2))
             await cb.answer()
             await eoa(cb,f"⚠️ В этой неделе есть записи:\n{ct}\n\nВсё равно заблокировать?{W}",kb=kb)
         else:
@@ -2186,7 +2188,7 @@ async def month_pick(cb: types.CallbackQuery):
             ct="\n".join(f"  {ds}: {len(appts[ds])} записей" for ds in conf)
             kb=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"{W}✅ ЗАКРЫТЬ (ЗАПИСИ СОХРАНЯТСЯ){W}",callback_data="adm_bm_yes")],
-            ]+nav_admin("adm_cal",depth=1))
+            ]+nav_admin("adm_cal",depth=2))
             await eoa(cb,f"⚠️ В {MN_RU[m-1]} {y} есть записи:\n{ct}\n\nВсё равно закрыть?{W}",kb=kb)
         else:
             for d in range(1,dn+1):
@@ -2233,7 +2235,7 @@ async def adm_book_menu(cb: types.CallbackQuery):
         [InlineKeyboardButton(text=f"{W}✏️ НОВЫЙ - БЕСПЛАТНАЯ{W}", callback_data="adm_book_new_free")],
         [InlineKeyboardButton(text=f"{W}✏️ НОВЫЙ - ПЛАТНАЯ{W}",    callback_data="adm_book_new_paid")],
         [InlineKeyboardButton(text=f"{W}✏️ ПОСТОЯННЫЙ{W}",         callback_data="adm_book_reg")],
-    ]+nav_admin("adm_back",depth=1))
+    ]+nav_admin("adm_back",depth=2))
     await cb.answer(); await eoa(cb,f"Выбери тип записи:{W}",kb=kb)
  
 @dp.callback_query(F.data=="adm_book_new_free")
@@ -2375,7 +2377,7 @@ async def adm_analytics(cb: types.CallbackQuery):
         [InlineKeyboardButton(text=f"{W}⭐️ ОТЗЫВЫ{W}",              callback_data="adm_reviews")],
         [InlineKeyboardButton(text=f"{W}🚫 ЗАБЛОКИРОВАННЫЕ{W}",     callback_data="adm_blocked")],
         [InlineKeyboardButton(text=f"{W}📊 ИСТОРИЯ / ЛОГИ{W}",      callback_data="adm_logs")],
-    ]+nav_admin("adm_back",depth=1))
+    ]+nav_admin("adm_back",depth=2))
     await cb.answer(); await eoa(cb,f"📈 *АНАЛИТИКА*{W}",kb=kb)
  
 @dp.callback_query(F.data=="adm_stats")
@@ -2514,8 +2516,8 @@ async def adm_unconf(cb: types.CallbackQuery):
                     text=f"{W}🟡 {fmt_date(ds)} {r['time']} {tl} - {r['name']}{W}",
                     callback_data=f"aslot_{ds}_{r['time']}")])
     if not rows:
-        await eoa(cb,f"Неподтверждённых нет.{W}",kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=1))); return
-    rows+=nav_admin("adm_back",depth=1)
+        await eoa(cb,f"Неподтверждённых нет.{W}",kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=2))); return
+    rows+=nav_admin("adm_back",depth=2)
     await eoa(cb,f"🟡 *НЕПОДТВЕРЖДЁННЫЕ:*{W}",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data=="adm_list")
@@ -2531,7 +2533,7 @@ async def adm_list(cb: types.CallbackQuery):
             text+=(f"{co}{tl} *{fmt_date(ds)}* {r['time']} ⏱{r.get('duration','—')}\n"
                    f"👤 {r['name']} @{r.get('username','')}\n📱 {r.get('platform','—')}\n\n"); found=True
     await eoa(cb,text if found else f"📭 Записей нет.{W}",
-              kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=1)))
+              kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=2)))
  
 @dp.callback_query(F.data=="adm_regulars")
 async def adm_regulars(cb: types.CallbackQuery):
@@ -2541,7 +2543,7 @@ async def adm_regulars(cb: types.CallbackQuery):
     kb=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}➕ ДОБАВИТЬ{W}",callback_data="adm_reg_add")],
         [InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ{W}",  callback_data="adm_reg_del")],
-    ]+nav_admin("adm_back",depth=1))
+    ]+nav_admin("adm_back",depth=2))
     await eoa(cb,text,kb=kb)
  
 @dp.callback_query(F.data=="adm_reg_add")
@@ -2590,8 +2592,8 @@ async def adm_delete_client(cb: types.CallbackQuery):
                 text=f"{W}🗑 {r.get('name','')} @{u}{W}",callback_data=f"del_client_{u}")])
     if not rows:
         await eoa(cb,f"Клиентов в базе нет.{W}",
-                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=1))); return
-    rows+=nav_admin("adm_back",depth=1)
+                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=2))); return
+    rows+=nav_admin("adm_back",depth=2)
     await cb.answer(); await eoa(cb,f"Выбери клиента для удаления:{W}",kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data.startswith("del_client_") & ~F.data.startswith("del_client_yes_"))
@@ -2655,7 +2657,7 @@ async def adm_mtype(cb: types.CallbackQuery):
     today=date.today()
     await eoa(cb,f"✅ Записан вручную!\n\n📅 {fmt_date(ds)} в {tm}\n{tl}\n👤 {name} @{tg}\n📱 {plat}",
               kb=cal_admin(today.year,today.month))
-    await notify_adm(f"✏️ *Ручная запись*\n📅 {fmt_date(ds)} в {tm}\n{tl}\n👤 {name} @{tg}")
+    await notify_adm(f"✏️ *Ручная запись*\n📅 {fmt_date(ds)} в {tm}\n{tl}\n👤 {name} @{tg}", kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
     if client_uid:
         link=PLATFORMS.get(plat,"")
         ck=InlineKeyboardMarkup(inline_keyboard=[
@@ -2681,7 +2683,11 @@ async def adm_mtype(cb: types.CallbackQuery):
     else:
         try: me=await bot.get_me(); link2=f"https://t.me/{me.username}"
         except: link2="https://t.me/kasikov_bot"
-        await notify_adm(f"⚠️ Клиент @{tg} не найден в боте.\nОтправь ему ссылку:\n{link2}")
+        await notify_adm(
+            f"⚠️ Клиент @{tg} не найден в боте.\nОтправь ему ссылку:\n{link2}",
+            kb=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")
+            ]]))
  
 @dp.callback_query(F.data.startswith("stype_"))
 async def stype_cb(cb: types.CallbackQuery):
@@ -2865,12 +2871,12 @@ async def handle_text(msg: types.Message):
         if not found:
             await msg.answer(f"Не найдено.{W}",reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"{W}✏️ ВВЕСТИ ВРУЧНУЮ{W}",callback_data=f"manual_client_{forced}")],
-            ]+nav_admin("adm_back",depth=1))); return
+            ]+nav_admin("adm_back",depth=2))); return
         rows=[[InlineKeyboardButton(
             text=f"{W}👤 {u['name']} @{u['username']}{W}" if u['name'] else f"👤 @{u['username']}",
             callback_data=f"pick_client_{forced}_{u['username']}")]
             for u in found.values()]
-        rows+=nav_admin("adm_back",depth=1)
+        rows+=nav_admin("adm_back",depth=2)
         await msg.answer(f"Найдено {len(found)}:{W}",reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)); return
  
     if step=="adm_reg_username":
@@ -2935,4 +2941,3 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
- 
