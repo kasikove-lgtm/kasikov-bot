@@ -549,7 +549,7 @@ def cal_user(year, month, back_cb="main"):
     rows += nav_client(back_cb, depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
-def cal_admin(year, month):
+def cal_admin(year, month, show_menu=True):
     today = date.today(); cal = calendar.monthcalendar(year, month)
     appts = db_get("appts",{}); slots = db_get("slots",{}); bd = db_get("blocked_dates",[]); rows = []
     rows.append([InlineKeyboardButton(text=f"{W}🔧 {MN_RU[month-1]} {year}{W}", callback_data="noop")])
@@ -596,18 +596,19 @@ def cal_admin(year, month):
         InlineKeyboardButton(text=f"{W}✅ МЕСЯЦ ОТКРЫТЬ{W}",  callback_data="adm_open_month"),
         InlineKeyboardButton(text=f"{W}❌ МЕСЯЦ ЗАКРЫТЬ{W}",  callback_data="adm_block_month"),
     ])
-    # Все кнопки меню админа прямо под календарём
-    rows.append([InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}", callback_data="adm_book_menu")])
-    rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ{W}", callback_data="adm_unconf")])
-    rows.append([InlineKeyboardButton(text=f"{W}📋 ВСЕ ЗАПИСИ{W}",              callback_data="adm_list")])
-    rows.append([InlineKeyboardButton(text=f"{W}📈 АНАЛИТИКА{W}",               callback_data="adm_analytics")])
-    rows.append([
+    # Кнопки меню админа — только если show_menu=True
+    if show_menu:
+        rows.append([InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}", callback_data="adm_book_menu")])
+        rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ{W}", callback_data="adm_unconf")])
+        rows.append([InlineKeyboardButton(text=f"{W}📋 ВСЕ ЗАПИСИ{W}",              callback_data="adm_list")])
+        rows.append([InlineKeyboardButton(text=f"{W}📈 АНАЛИТИКА{W}",               callback_data="adm_analytics")])
+        rows.append([
         InlineKeyboardButton(text=f"{W}📤 РАССЫЛКА ВСЕМ{W}",  callback_data="adm_broadcast"),
         InlineKeyboardButton(text=f"{W}📤 ПОСТ ИЗ КАНАЛА{W}", callback_data="adm_post"),
     ])
-    rows.append([InlineKeyboardButton(text=f"{W}👥 ПОСТОЯННЫЕ КЛИЕНТЫ{W}",  callback_data="adm_regulars")])
-    rows.append([InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ КЛИЕНТА{W}",      callback_data="adm_delete_client")])
-    rows.append([InlineKeyboardButton(text=f"{W}🏠 МЕНЮ КЛИЕНТА{W}",          callback_data="main")])
+        rows.append([InlineKeyboardButton(text=f"{W}👥 ПОСТОЯННЫЕ КЛИЕНТЫ{W}",  callback_data="adm_regulars")])
+        rows.append([InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ КЛИЕНТА{W}",      callback_data="adm_delete_client")])
+        rows.append([InlineKeyboardButton(text=f"{W}🏠 МЕНЮ КЛИЕНТА{W}",          callback_data="main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_month_picker(action="close"):
@@ -2330,7 +2331,7 @@ async def pick_client(cb: types.CallbackQuery):
     today=date.today(); await cb.answer()
     await cb.message.answer(
         f"✅ Клиент: *{client_name}* @{uname}\nВыбери дату:{W}",
-        reply_markup=cal_admin(today.year, today.month))
+        reply_markup=cal_admin(today.year, today.month, show_menu=False))
  
 @dp.callback_query(F.data.startswith("manual_client_"))
 async def manual_client(cb: types.CallbackQuery):
@@ -2363,7 +2364,7 @@ async def adm_reg_pick(cb: types.CallbackQuery):
     today=date.today(); await cb.answer()
     await cb.message.answer(
         f"Записываю @{uname}. Выбери дату:{W}",
-        reply_markup=cal_admin(today.year, today.month))
+        reply_markup=cal_admin(today.year, today.month, show_menu=False))
  
 # ── АНАЛИТИКА ─────────────────────────────────────
  
@@ -2941,3 +2942,4 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
+ 
