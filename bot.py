@@ -370,14 +370,14 @@ T_PRICE = """💳 *ПЛАТНАЯ ВСТРЕЧА - УСЛОВИЯ И ЦЕНЫ*
  
 *Первая платная встреча*
 Если на бесплатную не получилось прийти вовремя или предупредить заранее - бывает всякое. В этом случае первую встречу можно провести в коротком платном формате.
-30 минут - 3 000 руб.
+30 минут - 3 000 руб. / 45$
  
 *Разовая встреча*
-60 минут - 5 000 руб.
+60 минут - 5 000 руб. / 75$
 Если хочешь поработать регулярно - минимальный формат для постоянной работы 60 минут.
  
 *Пакет «Глубокая работа»*
-5 встреч (5 часов) - 20 000 руб.
+5 встреч (5 часов) - 20 000 руб. / 300$
 Экономия 5 000 руб. по сравнению с разовыми. Действует 2 месяца.
  
 Работаю по видео - Zoom, ВКонтакте, Яндекс Телемост, Google Meet, Teams, MAX."""
@@ -609,6 +609,9 @@ def cal_admin(year, month, show_menu=True):
         rows.append([InlineKeyboardButton(text=f"{W}👥 ПОСТОЯННЫЕ КЛИЕНТЫ{W}",  callback_data="adm_regulars")])
         rows.append([InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ КЛИЕНТА{W}",      callback_data="adm_delete_client")])
         rows.append([InlineKeyboardButton(text=f"{W}🏠 МЕНЮ КЛИЕНТА{W}",          callback_data="main")])
+    # При show_menu=False добавляем навигацию
+    if not show_menu:
+        rows += nav_admin("adm_back", depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def kb_month_picker(action="close"):
