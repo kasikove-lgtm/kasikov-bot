@@ -505,7 +505,8 @@ def kb_main(is_adm=False):
 def kb_admin():
     """Меню админа - сразу показывает календарь + кнопки управления"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ{W}", callback_data="adm_unconf")],
+        [InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ АДМИНОМ{W}", callback_data="adm_unconf")],
+        [InlineKeyboardButton(text=f"{W}🟠 НЕПОДТВЕРЖДЁННЫЕ КЛИЕНТОМ{W}", callback_data="adm_unconf_client")],
         [InlineKeyboardButton(text=f"{W}📋 ВСЕ ЗАПИСИ{W}",              callback_data="adm_list")],
         [InlineKeyboardButton(text=f"{W}📈 АНАЛИТИКА{W}",               callback_data="adm_analytics")],
         [InlineKeyboardButton(text=f"{W}📤 РАССЫЛКА ВСЕМ{W}",           callback_data="adm_broadcast"),
@@ -599,7 +600,8 @@ def cal_admin(year, month, show_menu=True):
     # Кнопки меню админа — только если show_menu=True
     if show_menu:
         rows.append([InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}", callback_data="adm_book_menu")])
-        rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ ЗАПИСИ{W}", callback_data="adm_unconf")])
+        rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ АДМИНОМ{W}", callback_data="adm_unconf")],
+        [InlineKeyboardButton(text=f"{W}🟠 НЕПОДТВЕРЖДЁННЫЕ КЛИЕНТОМ{W}", callback_data="adm_unconf_client")])
         rows.append([InlineKeyboardButton(text=f"{W}📋 ВСЕ ЗАПИСИ{W}",              callback_data="adm_list")])
         rows.append([InlineKeyboardButton(text=f"{W}📈 АНАЛИТИКА{W}",               callback_data="adm_analytics")])
         rows.append([
@@ -1259,18 +1261,19 @@ async def uslot_sel(cb: types.CallbackQuery):
                 reply_markup=ck)
         else:
             st.update({"step":"desc","date":ds,"time":tm,"duration":"30 мин"}); set_st(uid,st)
-            skip_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=f"{W}⏭ ПРОПУСТИТЬ{W}", callback_data="desc_keep")],
-            ])
+            kb3 = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"{W}✏️ НАПИШУ САМ{W}",       callback_data="desc_write")],
+                [InlineKeyboardButton(text=f"{W}🧭 МИНИ-ДИАГНОСТИКА{W}", callback_data="diag_start")],
+                [InlineKeyboardButton(text=f"{W}⏭ ПРОПУСТИТЬ{W}",        callback_data="desc_keep")],
+            ] + nav_client("main", depth=2))
             await cb.message.answer(
-        "Отлично, записал 👍\n\n"
-        "Чтобы наша встреча была для тебя максимально полезной - "
-        "по желанию напиши что сейчас происходит. "
-        "Это поможет мне подготовиться и сразу войти в суть.\n\n"
-        "Если не хочешь - просто нажми ПРОПУСТИТЬ,\n"
-        "и выбери дальше платформу для видеозвонка.\n\n"
-        "Или напиши в сообщении про свою ситуацию 👇",
-                reply_markup=skip_kb)
+                "Отлично, записал 👍\n\n"
+                "Чтобы наша встреча была для тебя максимально полезной — по желанию расскажи немного о своей ситуации. "
+                "Это поможет мне подготовиться и сразу войти в суть.\n\n"
+                "✏️ НАПИШУ САМ — напиши текстом что сейчас происходит\n"
+                "🧭 МИНИ-ДИАГНОСТИКА — ответь на 5 коротких вопросов\n"
+                f"⏭ ПРОПУСТИТЬ — нажав эту кнопку перейдёшь к выбору платформы для звонка{W}",
+                reply_markup=kb3)
     else:
         st.update({"step":"duration","date":ds,"time":tm}); set_st(uid,st)
         await cb.message.answer(f"Выбери длительность встречи:{W}", reply_markup=kb_duration(depth=3))
@@ -1317,6 +1320,154 @@ async def desc_extend(cb: types.CallbackQuery):
     uid = cb.from_user.id; st = get_st(uid); st["step"] = "desc_retry"; set_st(uid,st)
     await cb.answer()
     await cb.message.answer(f"Пожалуйста, расскажи подробнее:{W}")
+ 
+ 
+ 
+# ════════════════════════════════════════════
+# МИНИ-ДИАГНОСТИКА
+# ════════════════════════════════════════════
+ 
+DIAG_Q = {
+    1: {
+        "text": "Вопрос 1 из 5 — *Что сейчас происходит?*",
+        "opts": [("Расстались недавно","diag_1_a"),("Развод в процессе","diag_1_b"),
+                 ("Давно расстались но не отпускает","diag_1_c"),
+                 ("Хочу разобраться в себе","diag_1_d"),("✏️ Напишу сам","diag_1_own")]
+    },
+    2: {
+        "text": "Вопрос 2 из 5 — *Что сейчас самое тяжёлое?*",
+        "opts": [("Не могу перестать думать об этом","diag_2_a"),
+                 ("Не понимаю что делать дальше","diag_2_b"),
+                 ("Злость и обида которую не могу отпустить","diag_2_c"),
+                 ("Одиночество и потеря смысла","diag_2_d"),("✏️ Напишу сам","diag_2_own")]
+    },
+    3: {
+        "text": "Вопрос 3 из 5 — *Что хочешь получить от сессии?*",
+        "opts": [("Просто выговориться и быть услышанным","diag_3_a"),
+                 ("Понять что со мной происходит","diag_3_b"),
+                 ("Конкретный план как двигаться дальше","diag_3_c"),
+                 ("Всё сразу","diag_3_d"),("✏️ Напишу сам","diag_3_own")]
+    },
+    4: {
+        "text": "Вопрос 4 из 5 — *Как давно это происходит?*",
+        "opts": [("Меньше месяца","diag_4_a"),("От месяца до полугода","diag_4_b"),
+                 ("Больше полугода","diag_4_c"),("Не знаю","diag_4_d"),
+                 ("✏️ Напишу сам","diag_4_own")]
+    },
+    5: {
+        "text": "Вопрос 5 из 5 — *Был ли раньше опыт работы с психологом?*",
+        "opts": [("Нет, первый раз","diag_5_a"),
+                 ("Да, разово — одна-две встречи","diag_5_b"),
+                 ("Да, работал какое-то время","diag_5_c"),
+                 ("Да, работаю сейчас с другим специалистом","diag_5_d"),
+                 ("✏️ Напишу сам","diag_5_own")]
+    },
+}
+ 
+def diag_kb(q_num):
+    q = DIAG_Q[q_num]
+    rows = [[InlineKeyboardButton(text=f"{W}{label}{W}", callback_data=cb_d)]
+            for label, cb_d in q["opts"]]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+ 
+@dp.callback_query(F.data == "diag_start")
+async def diag_start(cb: types.CallbackQuery):
+    uid = cb.from_user.id; st = get_st(uid)
+    st["step"] = "diag"; st["diag_q"] = 1; st["diag_ans"] = {}; set_st(uid, st)
+    await cb.answer()
+    await cb.message.answer(DIAG_Q[1]["text"], parse_mode="Markdown",
+                            reply_markup=diag_kb(1))
+ 
+@dp.callback_query(F.data.startswith("diag_") & ~F.data.startswith("diag_start"))
+async def diag_answer(cb: types.CallbackQuery):
+    uid = cb.from_user.id; st = get_st(uid)
+    data = cb.data  # diag_1_a, diag_2_own, etc
+    parts = data.split("_")  # ["diag","1","a"] или ["diag","1","own"]
+    q_num = int(parts[1])
+    choice = parts[2]
+ 
+    if choice == "own":
+        # Просим написать текстом
+        st["step"] = f"diag_own_{q_num}"; st["diag_q"] = q_num; set_st(uid, st)
+        await cb.answer()
+        await cb.message.answer(
+            f"Напиши свой ответ на вопрос {q_num} текстом 👇\n\n"
+            f"_{DIAG_Q[q_num]['text'].replace('*','')}_",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"{W}⏭ ПРОПУСТИТЬ ЭТОТ ВОПРОС{W}",
+                                      callback_data=f"diag_skip_{q_num}")]]))
+        return
+ 
+    # Сохраняем ответ
+    ans_text = next((label for label, cb_d in DIAG_Q[q_num]["opts"] if cb_d == data), data)
+    if "diag_ans" not in st: st["diag_ans"] = {}
+    st["diag_ans"][str(q_num)] = ans_text
+ 
+    if q_num < 5:
+        # Следующий вопрос
+        next_q = q_num + 1
+        st["diag_q"] = next_q; set_st(uid, st)
+        await cb.answer()
+        await cb.message.answer(DIAG_Q[next_q]["text"], parse_mode="Markdown",
+                                reply_markup=diag_kb(next_q))
+    else:
+        # Все вопросы отвечены — завершаем
+        set_st(uid, st); await cb.answer()
+        await diag_finish(cb.message, uid, st)
+ 
+@dp.callback_query(F.data.startswith("diag_skip_"))
+async def diag_skip(cb: types.CallbackQuery):
+    uid = cb.from_user.id; st = get_st(uid)
+    q_num = int(cb.data.split("_")[2])
+    st["diag_ans"] = st.get("diag_ans", {})
+    st["diag_ans"][str(q_num)] = "—"
+    if q_num < 5:
+        next_q = q_num + 1; st["diag_q"] = next_q; set_st(uid, st)
+        await cb.answer()
+        await cb.message.answer(DIAG_Q[next_q]["text"], parse_mode="Markdown",
+                                reply_markup=diag_kb(next_q))
+    else:
+        set_st(uid, st); await cb.answer()
+        await diag_finish(cb.message, uid, st)
+ 
+async def diag_finish(msg, uid, st):
+    """Завершение диагностики — сохраняем и переходим к платформе"""
+    ans = st.get("diag_ans", {})
+    # Формируем текст для desc
+    lines = []
+    for q_num in range(1, 6):
+        q_text = DIAG_Q[q_num]["text"].replace("*","").replace(f"Вопрос {q_num} из 5 — ","")
+        a = ans.get(str(q_num), "—")
+        lines.append(f"Q{q_num}: {q_text}\n→ {a}")
+    desc_text = "\n".join(lines)
+    st["desc"] = desc_text; st["step"] = "platform"
+    set_st(uid, st)
+ 
+    # Уведомляем админа
+    name = st.get("name", "Клиент") or "Клиент"
+    ds = st.get("date","?"); tm = st.get("time","?")
+    adm_text = (f"🧭 *Мини-диагностика*\n👤 {name}\n📅 {fmt_date(ds)} в {tm}\n\n{desc_text}")
+    await notify_adm(adm_text,
+        kb=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=f"{W}🔐 МЕНЮ АДМИНА{W}", callback_data="adm_back")]]))
+ 
+    # Показываем клиенту выбор платформы
+    ctype = st.get("type","free")
+    back_cb = "free" if ctype != "paid" else "paid_info"
+    await msg.answer(
+        f"Отлично, записал твои ответы 👍\n\nТеперь выбери платформу для звонка:{W}",
+        reply_markup=kb_platform(back_cb, depth=3))
+ 
+@dp.callback_query(F.data == "desc_write")
+async def desc_write(cb: types.CallbackQuery):
+    uid = cb.from_user.id; st = get_st(uid)
+    st["step"] = "desc"; set_st(uid, st); await cb.answer()
+    await cb.message.answer(
+        f"Напиши текстом что сейчас происходит — я прочитаю до встречи 👇{W}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"{W}⏭ ПРОПУСТИТЬ{W}", callback_data="desc_keep")],
+        ] + nav_client("main", depth=2)))
  
 @dp.callback_query(F.data == "desc_keep")
 async def desc_keep(cb: types.CallbackQuery):
@@ -1482,20 +1633,40 @@ async def my_appts(cb: types.CallbackQuery):
                 callback_data=f"my_rec_{ds}_{r['time']}")])
     rows += nav_client("main", depth=2)
     if len(rows) == 2:
-        await cb.message.answer(f"У тебя нет предстоящих записей.{W}",
-                                 reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        # Нет записей — ищем детально и показываем
+        await cb.message.answer(
+            f"У тебя пока нет предстоящих записей.\n\nЗапишись на встречу 👇{W}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+                [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+            ] + nav_client("main", depth=2)))
     else:
-        await cb.message.answer(f"📅 *Твои записи:*", parse_mode="Markdown",
+        await cb.message.answer(f"📅 *Твои записи:*{W}", parse_mode="Markdown",
                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data.startswith("my_rec_"))
 async def my_rec(cb: types.CallbackQuery):
     _, _, ds, tm = cb.data.split("_",3)
+    uid = cb.from_user.id
+    # Ищем запись в базе для показа деталей
+    appts = db_get("appts",{})
+    rec = next((r for r in appts.get(ds,[]) if r.get("user_id")==uid and r["time"]==tm), None)
+    if rec:
+        tl  = "💼 Платная" if rec.get("type")=="paid" else "🆓 Бесплатная"
+        dur = rec.get("duration","30 мин")
+        plat= rec.get("platform","—")
+        link= PLATFORMS.get(plat,"")
+        co  = "✅ подтверждена" if rec.get("confirmed") else "🟡 ожидает подтверждения"
+        paid_str = "✅" if rec.get("confirmed") else "🟡"
+        link_str = "\U0001f517 " + link + "\n" if link else ""
+        text = f"\U0001f4c5 {fmt_date(ds)} \u0432 {tm} \u041c\u0421\u041a\n{tl} | \u23f1 {dur}\n\U0001f4f1 {plat}\n{link_str}\u0421\u0442\u0430\u0442\u0443\u0441: {paid_str}{W}"
+    else:
+        text = f"📅 {fmt_date(ds)} в {tm} МСК{W}"
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}", callback_data="reschedule")],
         [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}",  callback_data=f"cancel_{ds}_{tm}")],
     ] + nav_client("my_appts", depth=2))
-    await cb.message.answer(f"📅 {fmt_date(ds)} в {tm} МСК{W}", reply_markup=kb)
+    await cb.message.answer(text, reply_markup=kb)
  
 @dp.callback_query(F.data == "reschedule")
 async def reschedule(cb: types.CallbackQuery):
@@ -1649,7 +1820,8 @@ async def adm_confirm_pay(cb: types.CallbackQuery):
             f"{'🔗 '+link if link else ''}\n\nЗа час до встречи придёт напоминание.{W}",
             reply_markup=ck)
     except: pass
-    await eoa(cb, cb.message.text + "\n\n✅ *Оплата подтверждена*")
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back", depth=2))
+    await eoa(cb, f"✅ *Оплата подтверждена!*\n\n👤 {name}\n📅 {fmt_date(ds)} в {tm} МСК", kb=adm_kb)
  
 @dp.callback_query(F.data.startswith("pay_intl_"))
 async def pay_intl(cb: types.CallbackQuery):
@@ -2406,11 +2578,40 @@ async def adm_analytics(cb: types.CallbackQuery):
         [InlineKeyboardButton(text=f"{W}📊 СТАТИСТИКА{W}",          callback_data="adm_stats")],
         [InlineKeyboardButton(text=f"{W}📊 EXCEL ОТЧЁТ{W}",         callback_data="adm_excel")],
         [InlineKeyboardButton(text=f"{W}📋 ПРОШЕДШИЕ БЕСПЛАТНЫЕ{W}",callback_data="adm_past_free")],
+        [InlineKeyboardButton(text=f"{W}📩 ОТЧЁТ ПО РАССЫЛКЕ{W}",   callback_data="adm_drip_report")],
         [InlineKeyboardButton(text=f"{W}⭐️ ОТЗЫВЫ{W}",              callback_data="adm_reviews")],
         [InlineKeyboardButton(text=f"{W}🚫 ЗАБЛОКИРОВАННЫЕ{W}",     callback_data="adm_blocked")],
         [InlineKeyboardButton(text=f"{W}📊 ИСТОРИЯ / ЛОГИ{W}",      callback_data="adm_logs")],
     ]+nav_admin("adm_back",depth=2))
     await cb.answer(); await eoa(cb,f"📈 *АНАЛИТИКА*{W}",kb=kb)
+ 
+ 
+@dp.callback_query(F.data == "adm_drip_report")
+async def adm_drip_report(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    drip = db_get("drip", {})
+    if not drip:
+        await eoa(cb, f"Рассылок ещё не было.{W}",
+                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
+        return
+    days_sent = {}
+    for uid_str, info in drip.items():
+        sent = info.get("sent", [])
+        for day in sent:
+            if day not in days_sent: days_sent[day] = []
+            days_sent[day].append({"name":info.get("name","—"),"username":info.get("username","—")})
+    lines = ["📩 *ОТЧЁТ ПО РАССЫЛКЕ*"]
+    for day in sorted(days_sent.keys()):
+        clients = days_sent[day]
+        lines.append(f"\n*День {day}* — отправлено {len(clients)} чел:")
+        for c in clients[-10:]:
+            lines.append(f"  👤 {c['name']} @{c['username']}")
+        if len(clients) > 10:
+            lines.append(f"  ...и ещё {len(clients)-10}")
+    text = "\n".join(lines)
+    if len(text) > 4000: text = text[:4000] + "\n..."
+    await eoa(cb, text, kb=InlineKeyboardMarkup(
+        inline_keyboard=nav_admin("adm_analytics", depth=2)))
  
 @dp.callback_query(F.data=="adm_stats")
 async def adm_stats(cb: types.CallbackQuery):
@@ -2563,7 +2764,35 @@ async def adm_unconf(cb: types.CallbackQuery):
     if not rows:
         await eoa(cb,f"Неподтверждённых нет.{W}",kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=2))); return
     rows+=nav_admin("adm_back",depth=2)
-    await eoa(cb,f"🟡 *НЕПОДТВЕРЖДЁННЫЕ:*{W}",kb=InlineKeyboardMarkup(inline_keyboard=rows))
+    await eoa(cb,f"🟡 *НЕПОДТВЕРЖДЁННЫЕ АДМИНОМ:*{W}",kb=InlineKeyboardMarkup(inline_keyboard=rows))
+ 
+ 
+@dp.callback_query(F.data == "adm_unconf_client")
+async def adm_unconf_client(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.username): return
+    appts=db_get("appts",{}); today=date.today(); rows=[]
+    for ds in sorted(appts.keys()):
+        try: d=datetime.strptime(ds,"%Y-%m-%d").date()
+        except: continue
+        if d<today: continue
+        for r in appts[ds]:
+            # Два случая:
+            # 1. При оформлении — запись есть но не подтверждена ещё
+            # 2. За час — напоминание отправлено но клиент не нажал
+            not_confirmed_booking = not r.get("confirmed")
+            not_confirmed_reminder = r.get("confirmed") and not r.get("cli_confirmed") and r.get("rem_client")
+            if not_confirmed_booking or not_confirmed_reminder:
+                reason = "при оформлении" if not_confirmed_booking else "за час до встречи"
+                tl="💼" if r.get("type")=="paid" else "🆓"
+                rows.append([InlineKeyboardButton(
+                    text=f"{W}🟠 {fmt_date(ds)} {r['time']} {tl} — {r['name']} ({reason}){W}",
+                    callback_data=f"aslot_{ds}_{r['time']}")])
+    if not rows:
+        await eoa(cb,f"Все клиенты подтвердили участие ✅{W}",
+                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=2))); return
+    rows+=nav_admin("adm_back",depth=2)
+    await eoa(cb,f"🟠 *НЕПОДТВЕРЖДЁННЫЕ КЛИЕНТОМ:*{W}",
+              kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data=="adm_list")
 async def adm_list(cb: types.CallbackQuery):
@@ -2796,6 +3025,21 @@ async def handle_text(msg: types.Message):
         return
     st=get_st(uid); step=st.get("step","")
  
+    if step.startswith("diag_own_"):
+        q_num = int(step.split("_")[2])
+        st["diag_ans"] = st.get("diag_ans", {})
+        st["diag_ans"][str(q_num)] = text
+        if q_num < 5:
+            next_q = q_num + 1; st["diag_q"] = next_q
+            st["step"] = f"diag_own_wait"; set_st(uid, st)
+            from aiogram.types import InlineKeyboardMarkup as IKM2
+            await msg.answer(DIAG_Q[next_q]["text"], parse_mode="Markdown",
+                             reply_markup=diag_kb(next_q))
+        else:
+            set_st(uid, st)
+            await diag_finish(msg, uid, st)
+        return
+ 
     if step in ("desc","desc_retry"):
         if len(text)<35:
             # Накапливаем текст
@@ -2991,3 +3235,4 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
+ 
