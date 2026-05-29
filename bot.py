@@ -652,9 +652,14 @@ def kb_month_picker(action="close"):
  
 def slots_for_booking(ds):
     """Все слоты для записи клиента - включая неоткрытые дни"""
-    appts = db_get("appts",{})
-    taken = {r["time"]:r for r in appts.get(ds,[])}
-    now_dt = now_msk()
+    appts   = db_get("appts",{})
+    slots_d = db_get("slots",{})
+    cs      = db_get("closed_slots",{})
+    bd      = db_get("blocked_dates",[])
+    taken   = {r["time"]:r for r in appts.get(ds,[])}
+    open_s  = slots_d.get(ds,[])
+    closed_s= cs.get(ds,[])
+    now_dt  = now_msk()
     is_today = datetime.strptime(ds, "%Y-%m-%d").date() == today_msk()
     rows = []; row = []
     for t in ALL_SLOTS:
@@ -666,12 +671,15 @@ def slots_for_booking(ds):
         if t in taken:
             em = "🔵" if taken[t].get("confirmed") else "🟡"
             cb_d = f"aslot_{ds}_{t}"
+        elif ds in bd or t in closed_s or (open_s and t not in open_s):
+            # Слот закрыт — показываем 🔴 но нельзя нажать для записи
+            em = "🔴"; cb_d = f"aslot_blocked_{ds}_{t}"
         else:
             em = "🟢"; cb_d = f"aslot_{ds}_{t}"
         row.append(InlineKeyboardButton(text=f"{W}{em}{t}{W}", callback_data=cb_d))
         if len(row) == 3: rows.append(row); row = []
     if row: rows.append(row)
-    rows += nav_admin("adm_cal", depth=2)
+    rows += nav_admin("adm_cal_clean", depth=2)
     return InlineKeyboardMarkup(inline_keyboard=rows)
  
 def slots_day_admin(ds):
@@ -1707,7 +1715,7 @@ async def adm_ok(cb: types.CallbackQuery):
         await bot.send_message(uid,
             f"✅ Встреча подтверждена!\n\n📅 {fmt_date(ds)} в {tm} МСК\n📱 {plat}\n"
             f"{'🔗 '+link if link else ''}\n\n"
-            "За час до встречи пришлю напоминание - там же попрошу подтвердить что всё в силе.",
+            "До встречи!",
             reply_markup=ck_conf)
     except: pass
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -2520,9 +2528,22 @@ async def adm_unblock_ask(cb):
 @dp.callback_query(F.data=="adm_logs")
 async def adm_logs(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    logs=db_get("logs",[]); text="📊 *ПОСЛЕДНИЕ 20 ДЕЙСТВИЙ:*\n\n"
-    for e in logs[-20:]: text+=f"🕐 {e['t']} @{e['u']}\n▶️ {e['a']}\n\n"
-    await eoa(cb,text if logs else f"Логов нет.{W}",
+    logs=db_get("logs",[])
+    if not logs:
+        await eoa(cb,f"Логов нет.{W}",
+                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
+        return
+    lines = []
+    for e in logs[-20:]:
+        t = str(e.get('t','')); u = str(e.get('u','')); a = str(e.get('a',''))
+        # Экранируем спецсимволы Markdown
+        a = a.replace('*','').replace('_','').replace('`','').replace('[','')
+        lines.append(f"\U0001f550 {t} @{u}\n\u25b6\ufe0f {a}")
+    text = "\U0001f4ca *ПОСЛЕДНИЕ 20 ДЕЙСТВИЙ:*\n\n" + "\n\n".join(lines)
+    # Telegram ограничение 4096 символов
+    if len(text) > 4000:
+        text = text[:4000] + "..."
+    await eoa(cb, text,
               kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
  
 @dp.callback_query(F.data=="adm_unconf")
@@ -2547,17 +2568,22 @@ async def adm_unconf(cb: types.CallbackQuery):
 @dp.callback_query(F.data=="adm_list")
 async def adm_list(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    appts=db_get("appts",{}); today=date.today(); text="📋 *ПРЕДСТОЯЩИЕ ЗАПИСИ:*\n\n"; found=False
+    appts=db_get("appts",{}); today=date.today(); rows=[]; found=False
     for ds in sorted(appts.keys()):
         try: d=datetime.strptime(ds,"%Y-%m-%d").date()
         except: continue
         if d<today: continue
         for r in appts[ds]:
-            tl="💼" if r.get("type")=="paid" else "🆓"; co="✅" if r.get("confirmed") else "🟡"
-            text+=(f"{co}{tl} *{fmt_date(ds)}* {r['time']} ⏱{r.get('duration','—')}\n"
-                   f"👤 {r['name']} @{r.get('username','')}\n📱 {r.get('platform','—')}\n\n"); found=True
-    await eoa(cb,text if found else f"📭 Записей нет.{W}",
-              kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back",depth=2)))
+            tl="💼" if r.get("type")=="paid" else "🆓"
+            co="✅" if r.get("confirmed") else "🟡"
+            rows.append([InlineKeyboardButton(
+                text=f"{W}{co}{tl} {fmt_date(ds)} {r['time']} — {r['name']}{W}",
+                callback_data=f"aslot_{ds}_{r['time']}")])
+            found=True
+    rows += nav_admin("adm_back",depth=2)
+    await eoa(cb,
+        f"📋 *ПРЕДСТОЯЩИЕ ЗАПИСИ:*{W}" if found else f"📭 Записей нет.{W}",
+        kb=InlineKeyboardMarkup(inline_keyboard=rows))
  
 @dp.callback_query(F.data=="adm_regulars")
 async def adm_regulars(cb: types.CallbackQuery):
@@ -2834,7 +2860,7 @@ async def handle_text(msg: types.Message):
             await msg.answer(f"Платформа для связи?{W}",reply_markup=kb_platform_adm("adm_book_menu",depth=2))
         else:
             st["step"]="adm_book_date"; set_st(uid,st); today=date.today()
-            await msg.answer(f"Записываю @{tg}. Выбери дату:{W}",reply_markup=cal_admin(today.year,today.month))
+            await msg.answer(f"Записываю @{tg}. Выбери дату:{W}",reply_markup=cal_admin(today.year,today.month,show_menu=False))
         return
  
     if step=="adm_move_new_time":
