@@ -1078,9 +1078,13 @@ async def go_main(cb: types.CallbackQuery):
 async def adm_back(cb: types.CallbackQuery):
     await cb.answer()
     today = date.today()
-    await eoa(cb,
-        CAL_HDR,
-        kb=cal_admin(today.year, today.month))
+    try:
+        await cb.message.edit_text(CAL_HDR, parse_mode="Markdown",
+                                   reply_markup=cal_admin(today.year, today.month))
+    except Exception as e:
+        if "not modified" in str(e).lower(): return
+        await cb.message.answer(CAL_HDR, parse_mode="Markdown",
+                                reply_markup=cal_admin(today.year, today.month))
  
 @dp.callback_query(F.data == "adm_menu")
 async def adm_menu(cb: types.CallbackQuery):
@@ -3235,4 +3239,3 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
- 
