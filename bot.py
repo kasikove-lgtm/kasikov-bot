@@ -991,6 +991,15 @@ async def bg_loop():
                                 ]])
                             await bot.send_message(item["uid"], d["text"], reply_markup=kb)
                         except: pass
+                    # Сохраняем историю отправки
+                    try:
+                        hist = db_get("drip_history", {})
+                        uid_key = str(item["uid"])
+                        if uid_key not in hist: hist[uid_key] = []
+                        if item["day"] not in hist[uid_key]:
+                            hist[uid_key].append(item["day"])
+                        db_set("drip_history", hist)
+                    except: pass
                 else: left.append(item)
             db_set("drip",left)
  
@@ -2593,17 +2602,26 @@ async def adm_analytics(cb: types.CallbackQuery):
 @dp.callback_query(F.data == "adm_drip_report")
 async def adm_drip_report(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    drip = db_get("drip", {})
+    drip = db_get("drip", [])  # список объектов {uid, day, at}
     if not drip:
         await eoa(cb, f"Рассылок ещё не было.{W}",
                   kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
         return
+    # Группируем по дням — смотрим что уже отправлено (нет в очереди = отправлено)
+    all_users = db_get("all_users", {})
+    # Берём историю из отдельной базы если есть, иначе из очереди
+    drip_history = db_get("drip_history", {})  # {uid: [day1, day2,...]}
     days_sent = {}
-    for uid_str, info in drip.items():
-        sent = info.get("sent", [])
-        for day in sent:
+    for uid_str, days_list in drip_history.items():
+        info = all_users.get(uid_str, {})
+        name = info.get("name","—"); uname = info.get("username","—")
+        for day in days_list:
             if day not in days_sent: days_sent[day] = []
-            days_sent[day].append({"name":info.get("name","—"),"username":info.get("username","—")})
+            days_sent[day].append({"name":name,"username":uname})
+    if not days_sent:
+        await eoa(cb, f"История рассылок пуста.{W}\nСообщения ещё не отправлялись.",
+                  kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
+        return
     lines = ["📩 *ОТЧЁТ ПО РАССЫЛКЕ*"]
     for day in sorted(days_sent.keys()):
         clients = days_sent[day]
@@ -3239,3 +3257,4 @@ async def main():
  
 if __name__ == "__main__":
     asyncio.run(main())
+ 
