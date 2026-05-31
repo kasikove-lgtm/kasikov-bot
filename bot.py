@@ -87,7 +87,7 @@ def today_msk():
 CAL_HDR = "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт"
 bot = Bot(token=TOKEN)
 dp  = Dispatcher()
-DB  = "kasikov_bot"
+DB  = "/app/shared/kasikov_bot"
 
 def db_get(k, d=None):
     with shelve.open(DB) as s: return s.get(k, d)
@@ -490,8 +490,8 @@ DRIP = {
 def kb_main(is_adm=False):
     rows = [
         [InlineKeyboardButton(text=f"{W}🎁 ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»{W}", callback_data="guide")],
-        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}",       callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}",       callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}",       callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}",       callback_data="paid_info")],
         [InlineKeyboardButton(text=f"{W}💼 ОБО МНЕ{W}",                          callback_data="about")],
         [InlineKeyboardButton(text=f"{W}❓ FAQ ЧАСТЫЕ ВОПРОСЫ{W}",               callback_data="faq")],
         [InlineKeyboardButton(text=f"{W}📅 МОИ ЗАПИСИ{W}",                       callback_data="my_appts")],
@@ -983,7 +983,7 @@ async def bg_loop():
                             kb = None
                             if d["kb"] == "free":
                                 kb = InlineKeyboardMarkup(inline_keyboard=[[
-                                    InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")
+                                    InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")
                                 ]])
                             elif d["kb"] == "channel":
                                 kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -1108,8 +1108,8 @@ async def about(cb: types.CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}🔬 МОИ МЕТОДЫ{W}",                callback_data="how_work")],
         [InlineKeyboardButton(text=f"{W}📋 КАК МЫ РАБОТАЕМ{W}",           callback_data="contract")],
-        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(T_ABOUT, parse_mode="Markdown", reply_markup=kb)
 
@@ -1118,8 +1118,8 @@ async def how_work(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}📋 КАК МЫ РАБОТАЕМ{W}",           callback_data="contract")],
-        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("about", depth=2))
     await cb.message.answer(T_HOW, parse_mode="Markdown", reply_markup=kb)
 
@@ -1128,8 +1128,8 @@ async def contract_cb(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{W}🔬 МОИ МЕТОДЫ{W}",                callback_data="how_work")],
-        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("about", depth=2))
     await cb.message.answer(T_CONTRACT, parse_mode="Markdown", reply_markup=kb)
 
@@ -1137,8 +1137,8 @@ async def contract_cb(cb: types.CallbackQuery):
 async def faq(cb: types.CallbackQuery):
     await cb.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-        [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+        [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+        [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
     ] + nav_client("main", depth=1))
     await cb.message.answer(T_FAQ, parse_mode="Markdown", reply_markup=kb)
 
@@ -1173,7 +1173,7 @@ async def check_sub(cb: types.CallbackQuery):
         log_act(uid, cb.from_user.username, "got_guide")
         drip_add(uid)
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+            [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
         ] + nav_client("guide", depth=2))
         await cb.message.answer(
             f"✅ Держи гайд!\n\n"
@@ -1192,7 +1192,7 @@ async def free_consult(cb: types.CallbackQuery):
     uid = cb.from_user.id
     if get_free_used(uid):
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+            [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
         ] + nav_client("main", depth=1))
         await cb.answer()
         await cb.message.answer(
@@ -1733,8 +1733,8 @@ async def my_appts(cb: types.CallbackQuery):
         await cb.message.answer(
             f"У тебя пока нет предстоящих записей.\n\nЗапишись на встречу 👇{W}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-                [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+                [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+                [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
             ] + nav_client("main", depth=2)))
     else:
         await cb.message.answer(f"📅 *Твои записи:*{W}", parse_mode="Markdown",
@@ -2006,11 +2006,18 @@ async def adm_cncl(cb: types.CallbackQuery):
         db_set("appts",appts)
     _block_adj(ds,tm,dur,unblock=True)
     try:
-        await bot.send_message(uid,f"❌ К сожалению, это время не получится.\nДля новой записи нажми кнопку ниже:{W}",
-                               reply_markup=kb_main())
+        kb_cl = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+            [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
+        ] + nav_client("main", depth=2))
+        await bot.send_message(uid,
+            f"❌ Евгений отменил запись\n\n📅 {fmt_date(ds)} в {tm} МСК\n\n"
+            f"Если захочешь записаться снова — выбери вариант ниже 👇{W}",
+            reply_markup=kb_cl)
     except: pass
     await cb.answer("❌ Запись отменена")
-    await eoa(cb, f"📅 *{fmt_date(ds)}* - запись отменена 🟢{W}", kb=slots_day_admin(ds))
+    await eoa(cb, f"📅 *{fmt_date(ds)}* - запись отменена 🟢{W}",
+              kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_back", depth=2)))
 
 @dp.callback_query(F.data.startswith("adm_mv_"))
 async def adm_mv(cb: types.CallbackQuery):
@@ -2981,8 +2988,8 @@ async def cli_conf_cancel(cb: types.CallbackQuery):
     await cb.message.answer(
         f"Понял, записал. Если захочешь записаться снова — я здесь 👇{W}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{W}🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
-            [InlineKeyboardButton(text=f"{W}💼 ПЛАТНАЯ ВСТРЕЧА{W}", callback_data="paid_info")],
+            [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
+            [InlineKeyboardButton(text=f"{W}💳🤝 ПЛАТНАЯ ВСТРЕЧА - СТОИМОСТЬ{W}", callback_data="paid_info")],
         ] + nav_client("main", depth=2)))
 
 @dp.callback_query(F.data.startswith("cli_ask_cancel_"))
