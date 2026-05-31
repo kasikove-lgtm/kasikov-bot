@@ -87,7 +87,9 @@ def today_msk():
 CAL_HDR = "📅 *УПРАВЛЕНИЕ ДНЯМИ*\n\n✅ свободный  🔵 записи  🟡 неподтверждённые  ❌ закрыт"
 bot = Bot(token=TOKEN)
 dp  = Dispatcher()
-DB  = "/app/shared/kasikov_bot"
+DB  = "/app/kasikov_bot"
+# Путь к базе данных (локальный - сохраняется при Стоп/Старт)
+# Для persistent storage включи "Общее хранилище" на bothost
 
 def db_get(k, d=None):
     with shelve.open(DB) as s: return s.get(k, d)
