@@ -600,14 +600,14 @@ def cal_admin(year, month, show_menu=True):
     # Кнопки меню админа — только если show_menu=True
     if show_menu:
         rows.append([InlineKeyboardButton(text=f"{W}📅🖊️ ЗАПИСАТЬ КЛИЕНТА{W}", callback_data="adm_book_menu")])
-        rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ АДМИНОМ{W}", callback_data="adm_unconf")],
-        [InlineKeyboardButton(text=f"{W}🟠 НЕПОДТВЕРЖДЁННЫЕ КЛИЕНТОМ{W}", callback_data="adm_unconf_client")])
+        rows.append([InlineKeyboardButton(text=f"{W}🟡 НЕПОДТВЕРЖДЁННЫЕ АДМИНОМ{W}", callback_data="adm_unconf")])
+        rows.append([InlineKeyboardButton(text=f"{W}🟠 НЕПОДТВЕРЖДЁННЫЕ КЛИЕНТОМ{W}", callback_data="adm_unconf_client")])
         rows.append([InlineKeyboardButton(text=f"{W}📋 ВСЕ ЗАПИСИ{W}",              callback_data="adm_list")])
         rows.append([InlineKeyboardButton(text=f"{W}📈 АНАЛИТИКА{W}",               callback_data="adm_analytics")])
         rows.append([
-        InlineKeyboardButton(text=f"{W}📤 РАССЫЛКА ВСЕМ{W}",  callback_data="adm_broadcast"),
-        InlineKeyboardButton(text=f"{W}📤 ПОСТ ИЗ КАНАЛА{W}", callback_data="adm_post"),
-    ])
+            InlineKeyboardButton(text=f"{W}📤 РАССЫЛКА ВСЕМ{W}",  callback_data="adm_broadcast"),
+            InlineKeyboardButton(text=f"{W}📤 ПОСТ ИЗ КАНАЛА{W}", callback_data="adm_post"),
+        ])
         rows.append([InlineKeyboardButton(text=f"{W}👥 ПОСТОЯННЫЕ КЛИЕНТЫ{W}",  callback_data="adm_regulars")])
         rows.append([InlineKeyboardButton(text=f"{W}🗑 УДАЛИТЬ КЛИЕНТА{W}",      callback_data="adm_delete_client")])
         rows.append([InlineKeyboardButton(text=f"{W}🏠 МЕНЮ КЛИЕНТА{W}",          callback_data="main")])
