@@ -1254,6 +1254,28 @@ async def uday_force(cb: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("uday_"))
 async def uday_sel(cb: types.CallbackQuery):
     ds = cb.data[5:]; uid = cb.from_user.id; st = get_st(uid)
+    # Проверяем повторную бесплатную запись
+    if st.get("type") == "free" and st.get("type") != "reschedule":
+        appts_all = db_get("appts",{})
+        today_d = today_msk()
+        existing_free = next((
+            (xds, r) for xds, recs in appts_all.items()
+            for r in recs
+            if r.get("user_id")==uid and r.get("type")=="free"
+            and datetime.strptime(xds,"%Y-%m-%d").date() >= today_d
+        ), None)
+        if existing_free:
+            xds, xrec = existing_free
+            kb_ex = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"{W}❌ ОТМЕНИТЬ{W}", callback_data=f"cancel_{xds}_{xrec['time']}")],
+                [InlineKeyboardButton(text=f"{W}🔄 ПЕРЕНЕСТИ{W}", callback_data="reschedule")],
+            ] + nav_client("main", depth=2))
+            await cb.answer()
+            await cb.message.answer(
+                f"У тебя уже есть бесплатная запись:\n\n"
+                f"📅 {fmt_date(xds)} в {xrec['time']} МСК\n\n"
+                f"Хочешь отменить или перенести?{W}", reply_markup=kb_ex)
+            return
     if st.get("type") != "reschedule" and has_booking(uid,ds):
         # Показываем запись с кнопками вместо просто предупреждения
         appts = db_get("appts",{})
@@ -1639,6 +1661,20 @@ async def confirm_book(cb: types.CallbackQuery):
     if ds not in appts: appts[ds] = []
     if any(r["user_id"]==uid and r["time"]==tm for r in appts[ds]):
         await cb.answer("Ты уже записан на это время", show_alert=True); return
+    # Проверяем что все слоты для нужной длительности свободны
+    dur_map = {"30 мин":1,"1 час":2,"1.5 часа":3,"2 часа":4,"2.5 часа":5,"3 часа":6}
+    slots_need = dur_map.get(dur, 1)
+    if slots_need > 1:
+        taken_times = {r["time"] for r in appts.get(ds,[])}
+        cs_times = set(db_get("closed_slots",{}).get(ds,[]))
+        open_slots = db_get("slots",{}).get(ds, ALL_SLOTS)
+        sdt = datetime.strptime(f"{ds} {tm}", "%Y-%m-%d %H:%M")
+        for i in range(1, slots_need):
+            next_t = (sdt + timedelta(minutes=30*i)).strftime("%H:%M")
+            if next_t in taken_times or next_t in cs_times or next_t not in open_slots:
+                await cb.answer(
+                    f"Недостаточно свободного времени для {dur}. Выбери другое время.",
+                    show_alert=True); return
     appts[ds].append({
         "user_id":uid,"name":name,"time":tm,"username":uname,
         "type":ctype,"platform":plat,"duration":dur,"desc":desc,
@@ -1692,7 +1728,7 @@ async def my_appts(cb: types.CallbackQuery):
                 text=f"{W}📅 {fmt_date(ds)} {r['time']} {tl}{W}",
                 callback_data=f"my_rec_{ds}_{r['time']}")])
     rows += nav_client("main", depth=2)
-    if len(rows) == 2:
+    if len(rows) == 1:
         # Нет записей — ищем детально и показываем
         await cb.message.answer(
             f"У тебя пока нет предстоящих записей.\n\nЗапишись на встречу 👇{W}",
