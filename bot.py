@@ -974,6 +974,7 @@ async def bg_loop():
             db_set("feedback_timer",ft)
  
             drip = db_get("drip",[]); left = []
+            if isinstance(drip, dict): drip = []; db_set("drip",[])
             for item in drip:
                 if now >= datetime.fromisoformat(item["at"]):
                     d = DRIP.get(item["day"])
@@ -2602,7 +2603,8 @@ async def adm_analytics(cb: types.CallbackQuery):
 @dp.callback_query(F.data == "adm_drip_report")
 async def adm_drip_report(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
-    drip = db_get("drip", [])  # список объектов {uid, day, at}
+    drip = db_get("drip", [])
+    if isinstance(drip, dict): drip = []  # защита от старого формата
     if not drip:
         await eoa(cb, f"Рассылок ещё не было.{W}",
                   kb=InlineKeyboardMarkup(inline_keyboard=nav_admin("adm_analytics",depth=2)))
