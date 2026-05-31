@@ -708,7 +708,24 @@ def slots_day_admin(ds):
             continue
         if t in taken:
             em = "🔵" if taken[t].get("confirmed") else "🟡"; cb = f"aslot_{ds}_{t}"
-        elif t in closed_d or is_bd:
+        elif t in closed_d and t not in open_s and not is_bd:
+            # Смежный занятый слот — показываем как занятый (синий/жёлтый)
+            # Ищем запись которая занимает этот слот
+            master_rec = None
+            for rec_t, rec in taken.items():
+                dur_n = {"30 мин":1,"1 час":2,"1.5 часа":3,"2 часа":4,"2.5 часа":5,"3 часа":6}.get(rec.get("duration","30 мин"),1)
+                try:
+                    sdt2 = datetime.strptime(f"{ds} {rec_t}","%Y-%m-%d %H:%M")
+                    for i in range(1, dur_n):
+                        if (sdt2 + timedelta(minutes=30*i)).strftime("%H:%M") == t:
+                            master_rec = rec; break
+                except: pass
+                if master_rec: break
+            if master_rec:
+                em = "🔵" if master_rec.get("confirmed") else "🟡"; cb = f"aslot_{ds}_{master_rec['time']}"
+            else:
+                em = "🔴"; cb = f"aslot_blocked_{ds}_{t}"
+        elif is_bd:
             em = "🔴"; cb = f"aslot_blocked_{ds}_{t}"
         else:
             em = "🟢"; cb = f"aslot_{ds}_{t}"
@@ -1889,7 +1906,10 @@ async def bank_sel(cb: types.CallbackQuery):
             name=r.get("name","—"); dur=r.get("duration","—"); r["bank"]=bank
             price=PRICES.get(dur,5000); break
     db_set("appts",appts); await cb.answer(f"✅ Банк {bank} выбран")
-    await cb.message.answer(f"✅ Информация об оплате отправлена Евгению. Ожидай подтверждения.{W}")
+    nav_kb = InlineKeyboardMarkup(inline_keyboard=nav_client("main", depth=2))
+    await cb.message.answer(
+        f"✅ Информация об оплате отправлена Евгению. Ожидай подтверждения.{W}",
+        reply_markup=nav_kb)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ ОПЛАТУ{W}",
                              callback_data=f"adm_confirm_pay_{uid}_{ds}_{tm}")
@@ -1933,9 +1953,17 @@ async def pay_intl(cb: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("intl_req_"))
 async def intl_req(cb: types.CallbackQuery):
-    rest=cb.data[len("adm_cncl_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
+    rest=cb.data[len("intl_req_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     await cb.answer("✅ Запрос отправлен Евгению")
-    await cb.message.answer(f"✅ Евгений получил твой запрос и пришлёт реквизиты в ближайшее время.{W}")
+    kb_intl = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"{W}💬 ПОСМОТРЕТЬ РЕКВИЗИТЫ (чат){W}",
+                              url=f"https://t.me/kasikovevgenii")],
+        [InlineKeyboardButton(text=f"{W}✅ ПОЛУЧИЛ РЕКВИЗИТЫ{W}",
+                              callback_data=f"intl_paid_{uid}_{ds}_{tm}")],
+    ] + nav_client("main", depth=2))
+    await cb.message.answer(
+        f"✅ Евгений получил твой запрос и пришлёт реквизиты в ближайшее время.{W}",
+        reply_markup=kb_intl)
     appts = db_get("appts",{}); name="—"
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm: name=r.get("name","—"); break
@@ -1947,13 +1975,16 @@ async def intl_req(cb: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("intl_paid_"))
 async def intl_paid(cb: types.CallbackQuery):
-    rest=cb.data[len("adm_mv_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
+    rest=cb.data[len("intl_paid_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     appts = db_get("appts",{}); name="—"; dur="—"; price=5000
     for r in appts.get(ds,[]):
         if r["user_id"]==uid and r["time"]==tm:
             name=r.get("name","—"); dur=r.get("duration","—"); price=PRICES.get(dur,5000); break
     await cb.answer()
-    await cb.message.answer(f"✅ Информация об оплате отправлена Евгению. Ожидай подтверждения.{W}")
+    nav_kb = InlineKeyboardMarkup(inline_keyboard=nav_client("main", depth=2))
+    await cb.message.answer(
+        f"✅ Информация об оплате отправлена Евгению. Ожидай подтверждения.{W}",
+        reply_markup=nav_kb)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=f"{W}✅ ПОДТВЕРДИТЬ ОПЛАТУ{W}",
                              callback_data=f"adm_confirm_pay_{uid}_{ds}_{tm}")
@@ -1999,7 +2030,7 @@ async def adm_ok(cb: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("adm_cncl_") & ~F.data.startswith("adm_cncl_from_list_"))
 async def adm_cncl(cb: types.CallbackQuery):
-    rest=cb.data[len("adm_cncl_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
+    rest=cb.data[len("intl_req_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     dur="30 мин"; appts=db_get("appts",{})
     if ds in appts:
         for r in appts[ds]:
@@ -2023,7 +2054,7 @@ async def adm_cncl(cb: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("adm_mv_"))
 async def adm_mv(cb: types.CallbackQuery):
-    rest=cb.data[len("adm_mv_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
+    rest=cb.data[len("intl_paid_"):]; uid_s,ds,tm=rest.split("_",2); uid=int(uid_s)
     set_st(cb.from_user.id,{"step":"adm_move_new_date","move_uid":uid,"move_ds":ds,"move_tm":tm})
     today=date.today(); await cb.answer()
     await eoa(cb,f"Выбери новую дату для переноса:{W}",kb=cal_admin(today.year,today.month))
