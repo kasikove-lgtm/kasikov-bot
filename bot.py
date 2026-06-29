@@ -724,14 +724,14 @@ def slots_day_admin(ds):
             # Смежный слот длинной записи — показываем тем же цветом что и основной слот
             em = "🔵" if master_rec.get("confirmed") else "🟡"; cb = f"aslot_{ds}_{master_rec['time']}"
         elif is_bd:
-            # День полностью закрыт, но слот можно открыть точечно
-            em = "🔴"; cb = f"adm_toggle_slot_{ds}_{t}"
+            # День полностью закрыт, но слот можно открыть точечно через aslot_open
+            em = "🔴"; cb = f"aslot_{ds}_{t}"
         elif t in closed_d:
-            em = "🔴"; cb = f"adm_toggle_slot_{ds}_{t}"
+            em = "🔴"; cb = f"aslot_{ds}_{t}"
         elif t in open_s:
             em = "🟢"; cb = f"aslot_{ds}_{t}"
         else:
-            em = "🔴"; cb = f"adm_toggle_slot_{ds}_{t}"
+            em = "🔴"; cb = f"aslot_{ds}_{t}"
         row.append(InlineKeyboardButton(text=f"{W}{em}{t}{W}", callback_data=cb))
         if len(row) == 3: rows.append(row); row = []
     if row: rows.append(row)
@@ -2380,12 +2380,14 @@ async def aslot_open(cb: types.CallbackQuery):
                   kb=kb_platform_adm("adm_book_menu",depth=2)); return
     if st.get("step")=="adm_bulk_pick":
         mode=st.get("bulk_mode","open")
-        slots2=db_get("slots",{}); cs2=db_get("closed_slots",{})
+        slots2=db_get("slots",{}); cs2=db_get("closed_slots",{}); bd2=db_get("blocked_dates",[])
         if ds not in slots2: slots2[ds]=[]
         if ds not in cs2: cs2[ds]=[]
         if mode=="open":
             if tm not in slots2[ds]: slots2[ds].append(tm); slots2[ds]=sorted(slots2[ds])
             if tm in cs2[ds]: cs2[ds].remove(tm)
+            # Открытие слота точечно снимает полную блокировку дня (если была)
+            if ds in bd2: bd2.remove(ds); db_set("blocked_dates",bd2)
             await cb.answer(f"🟢 Слот {tm} открыт")
         else:
             if tm not in cs2[ds]: cs2[ds].append(tm)
