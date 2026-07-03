@@ -212,7 +212,10 @@ def free_slots(ds):
     day_slots = slots.get(ds, [])
     if not day_slots: return []
     today = today_msk(); now = now_msk()
-    is_today = datetime.strptime(ds,"%Y-%m-%d").date() == today
+    day_date = datetime.strptime(ds,"%Y-%m-%d").date()
+    # Прошедший день - нет доступных слотов
+    if day_date < today: return []
+    is_today = day_date == today
     result = []
     for t in day_slots:
         if t in taken or t in closed: continue
@@ -469,6 +472,15 @@ T_FEEDBACK = """Независимо от того, будете ли Вы ра�
 3. С каким состоянием Вы вышел после неё?
 4. Планируете ли продолжать работу дальше?"""
 
+DRIP_NEW_TEXT = (
+    "Вчера Вы заходили ко мне в бот — и пропали 🙂\n\n"
+    "Держите ссылку на гайд «4 шага после расставания» — 30 страниц практики, "
+    "которую можно начать прямо сегодня.\n\n"
+    f"👉 {LEAD}\n\n"
+    "И подпишитесь на канал — там пишу про восстановление после расставания "
+    "и здоровые отношения. Никакой теории — только то что реально работает на практике."
+)
+
 DRIP = {
     1:   {"text":"Гайд уже у Вас. Открывайте когда будете готов - там есть одна практика которую можно сделать прямо сегодня.", "kb":"free"},
     7:   {"text":"После расставания больно не потому что Вы слабый.\n\nНейробиолог Этан Кросс: мозг воспринимает социальную боль в тех же зонах что и физическую. Когда Вам разбивают сердце - мозг регистрирует это как удар. Буквально.\n\nТы терял не просто человека. Вы терял версию себя который существовал рядом с этим человеком.\n\nБоль после расставания - это не слабость.", "kb":"channel"},
@@ -519,7 +531,7 @@ def kb_admin():
     ])
 
 def cal_user(year, month, back_cb="main"):
-    today = date.today(); cal = calendar.monthcalendar(year, month)
+    today = today_msk(); cal = calendar.monthcalendar(year, month)
     bd    = db_get("blocked_dates",[]); rows = []
     rows.append([InlineKeyboardButton(text=f"{W}📅 {MN_RU[month-1]} {year}{W}", callback_data="noop")])
     rows.append([InlineKeyboardButton(text=d, callback_data="noop")
@@ -877,8 +889,22 @@ def make_excel(d_from, d_to):
         ws.column_dimensions[col[0].column_letter].width = min(ml+4, 40)
     buf = io.BytesIO(); wb.save(buf); buf.seek(0); return buf
 
+def drip_new_add(uid):
+    """Добавить в воронку для тех кто зашёл но не запросил гайд"""
+    drip = db_get("drip", [])
+    drip_new = db_get("drip_new", [])
+    # Не добавляем если уже в стандартной рассылке
+    if any(item["uid"] == uid for item in drip):
+        return
+    # Не добавляем если уже в drip_new
+    if any(item["uid"] == uid for item in drip_new):
+        return
+    now = now_msk()
+    drip_new.append({"uid": uid, "at": (now + timedelta(hours=24)).isoformat(), "sent": False})
+    db_set("drip_new", drip_new)
+
 def drip_add(uid):
-    q = db_get("drip",[]); now = datetime.now()
+    q = db_get("drip",[]); now = now_msk()
     for day in DRIP:
         q.append({"uid":uid,"day":day,"at":(now+timedelta(days=day)).isoformat()})
     db_set("drip",q)
@@ -997,6 +1023,45 @@ async def bg_loop():
                     except: pass
             db_set("feedback_timer",ft)
 
+            # Воронка для тех кто зашёл но не запросил гайд
+            drip_new = db_get("drip_new", []); drip_new_left = []
+            for item in drip_new:
+                if item.get("sent"):
+                    drip_new_left.append(item)
+                    continue
+                if now >= datetime.fromisoformat(item["at"]):
+                    uid_n = item["uid"]
+                    # Проверяем - вдруг уже в стандартной рассылке (получил гайд)
+                    drip_check = db_get("drip", [])
+                    if any(x["uid"] == uid_n for x in drip_check):
+                        item["sent"] = True
+                        drip_new_left.append(item)
+                        continue
+                    # Отправляем сообщение про гайд
+                    try:
+                        kb_n = InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(
+                                text=f"{W}🎁 ГАЙД «4 ШАГА ПОСЛЕ РАССТАВАНИЯ»{W}",
+                                callback_data="guide")],
+                            [InlineKeyboardButton(
+                                text=f"{W}📢 Подписаться на канал{W}",
+                                url=f"https://t.me/{CHANNEL.lstrip('@')}")],
+                        ])
+                        await bot.send_message(uid_n, DRIP_NEW_TEXT, reply_markup=kb_n)
+                        item["sent"] = True
+                        # Добавляем в стандартную рассылку начиная с day=7
+                        drip_q = db_get("drip", [])
+                        for day in DRIP:
+                            if day >= 7:
+                                drip_q.append({"uid": uid_n, "day": day,
+                                               "at": (now + timedelta(days=day-1)).isoformat()})
+                        db_set("drip", drip_q)
+                    except: pass
+                    drip_new_left.append(item)
+                else:
+                    drip_new_left.append(item)
+            db_set("drip_new", drip_new_left)
+
             drip = db_get("drip",[]); left = []
             if isinstance(drip, dict): drip = []; db_set("drip",[])
             for item in drip:
@@ -1041,6 +1106,9 @@ async def cmd_handler(msg: types.Message):
     clr_st(uid)
     reg_user(uid, msg.from_user.username, msg.from_user.first_name)
     log_act(uid, msg.from_user.username, msg.text or "cmd")
+    # Добавляем в воронку для новых пользователей (если не админ)
+    if not is_admin(msg.from_user.username):
+        drip_new_add(uid)
     if is_admin(msg.from_user.username):
         chats = db_get("admin_chats",[])
         if uid not in chats: chats.append(uid); db_set("admin_chats",chats)
@@ -1110,6 +1178,7 @@ async def go_main(cb: types.CallbackQuery):
 
 @dp.callback_query(F.data == "adm_back")
 async def adm_back(cb: types.CallbackQuery):
+    clr_st(cb.from_user.id)  # сбрасываем зависшие шаги (перенос/запись/буллит-режим)
     await cb.answer()
     today = date.today()
     try:
@@ -1195,6 +1264,10 @@ async def check_sub(cb: types.CallbackQuery):
     uid = cb.from_user.id
     if await is_sub(uid):
         log_act(uid, cb.from_user.username, "got_guide")
+        # Убираем из drip_new чтобы не было дублей
+        drip_new = db_get("drip_new", [])
+        drip_new = [x for x in drip_new if x["uid"] != uid]
+        db_set("drip_new", drip_new)
         drip_add(uid)
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=f"{W}🆓🤝 ПЕРВАЯ ВСТРЕЧА - БЕСПЛАТНО{W}", callback_data="free")],
@@ -2154,6 +2227,7 @@ async def adm_cal_clean(cb: types.CallbackQuery):
 @dp.callback_query(F.data == "adm_cal")
 async def adm_cal(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.username): return
+    clr_st(cb.from_user.id)  # сбрасываем зависшие шаги
     await cb.answer(); today = date.today()
     await eoa(cb,
         CAL_HDR,
